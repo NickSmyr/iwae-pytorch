@@ -1,0 +1,7 @@
+colorlog>=4.4.0
+humanize>=3.1.0
+matplotlib>=3.3.1
+pyyaml>=5.3.1
+torch>=1.7.1
+torchvision>=0.8.2
+tqdm
