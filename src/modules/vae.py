@@ -45,25 +45,27 @@ class VAE(nn.Module):
         input_dim = c_in * w_in_width * w_in_height
 
         # Encoder Network
-        enc_hidden_dims = [input_dim] + hidden_dims + [q_dim]
+        enc_hidden_dims = [input_dim] + hidden_dims
         self.encoder = nn.Sequential(*list(chain.from_iterable(
             [nn.Linear(in_features=h_in, out_features=h_out, bias=use_bias), nn.Tanh()]
             for h_in, h_out in zip(enc_hidden_dims[:-1], enc_hidden_dims[1:])
         )))
 
         # Encoder Sampler
-        # TODO
+        self.encoder_mean = nn.Linear(in_features=hidden_dims[-1], out_features=q_dim, bias=use_bias)
+        # TODO sigma network
 
         # Decoder Network
-        dec_hidden_dims = [p_dim] + list(reversed(hidden_dims)) + [input_dim]
+        dec_hidden_dims = [p_dim] + list(reversed(hidden_dims))
         self.decoder = nn.Sequential(*list(chain.from_iterable(
             [nn.Linear(in_features=h_in, out_features=h_out, bias=use_bias), nn.Tanh()]
             for h_in, h_out in zip(dec_hidden_dims[:-1], dec_hidden_dims[1:])
         )))
 
         # Decoder Sampler
-        # TODO
+        self.decoder_mean = nn.Linear(in_features=hidden_dims[0], out_features=input_dim, bias=use_bias)
+        # TODO sigma network
 
 
     def forward(self, x):
-        return self.decoder(self.encoder(x))
+        return self.decoder_mean(self.decoder(self.encoder_mean(self.encoder(x))))
