@@ -7,8 +7,8 @@ from torchvision.transforms import ToTensor, Compose, Lambda
 import matplotlib.pyplot as plt
 
 from modules.ae import AE
-#from src.modules.vae import VAE
-#from src.modules.iwae import IWAE
+from modules.vae import VAE
+from modules.iwae import IWAE
 
 from modules.train import train
 from modules.validate import validate
@@ -23,7 +23,7 @@ beta1 = 0.9
 beta2 = 0.999
 adam_epsilon = 1e-4
 
-# Set to 'AE', 'VAE' or 'IWAE' (the latter not implemented yet)
+# Set to 'AE', 'VAE' or 'IWAE'
 model_type = 'AE'
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -48,10 +48,10 @@ test_dataloader = DataLoader(test_data, batch_size=batch_size, pin_memory=True)
 
 if model_type == 'AE':
     model = AE()
-# else if model_type == 'VAE':
-#     model = VAE()
-# else if model_type == 'IWAE':
-#     model = IWAE()
+elif model_type == 'VAE':
+    model = VAE()
+elif model_type == 'IWAE':
+    model = IWAE()
 else:
     print(f"Unknown model type: {model_type}")
     exit(1)
