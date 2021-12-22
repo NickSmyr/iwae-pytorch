@@ -24,7 +24,7 @@ beta2 = 0.999
 adam_epsilon = 1e-4
 
 # Set to 'AE', 'VAE' or 'IWAE'
-model_type = 'AE'
+model_type = 'VAE'
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Using {device} device")
@@ -49,7 +49,8 @@ test_dataloader = DataLoader(test_data, batch_size=batch_size, pin_memory=True)
 if model_type == 'AE':
     model = AE()
 elif model_type == 'VAE':
-    model = VAE()
+    # Single stochastic layer architecture from IWAE paper
+    model = VAE(q_dim=50, hidden_dims=[200, 200])
 elif model_type == 'IWAE':
     model = IWAE()
 else:

@@ -63,3 +63,7 @@ class VAE(nn.Module):
 
         # Decoder Sampler
         # TODO
+
+
+    def forward(self, x):
+        return self.decoder(self.encoder(x))
