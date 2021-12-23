@@ -12,6 +12,9 @@ half_log2pi = 1.0/2.0 * math.log(2.0 * math.pi)
 
 
 class Exponential(nn.Module):
+    """
+    An exponential output unit.
+    """
     def __init__(self):
         super().__init__()
 
@@ -19,10 +22,81 @@ class Exponential(nn.Module):
         return torch.exp(x)
 
 
-def calc_log_likelihood_of_samples(samples, mean, sigma):
+def calc_log_likelihood_of_samples_gaussian(samples, mean, sigma):
+    """
+    Calculate log p(samples|mean, sigma) assuming a gaussian distribution
+    """
     result = -torch.log(sigma) - half_log2pi - 1.0 / 2.0 * torch.square((samples - mean) / sigma)
     result = torch.sum(result, dim=1)
     return result
+
+
+class GaussianStochasticLayer(nn.Module):
+    """
+    A gaussian stochastic layer.
+    """
+    def __init__(
+        self,
+        input_dim,
+        hidden_dims,
+        output_dim,
+        device = "cpu",
+        use_bias: bool = True,
+        output_bias = None):
+        """
+        Constructor for a stochastic layer.
+        :param (int) input_dim: input dimension for layer
+        :param hidden_dims: number of neurons in encoder's hidden layers (and decoder's respective ones)
+        :param (int) output_dim: output dimension for layer
+        :param (bool) use_bias: set to True to add bias to the fully-connected (aka Linear) layers of the networks
+        """
+        nn.Module.__init__(self)
+
+        self.device = device
+
+        # Hidden network
+        self.hidden_network = nn.Sequential(*chain.from_iterable(
+            [nn.Linear(h_in, h_out, bias=use_bias), nn.Tanh()]
+            for h_in, h_out in zip([input_dim] + hidden_dims[:-1], hidden_dims[1:])
+        ))
+
+        # Sampler
+        self.mean_network = nn.Linear(hidden_dims[-1], output_dim, bias=use_bias)
+        if not output_bias is None:
+            with torch.no_grad():
+                self.mean_network.bias.copy_(output_bias)
+        self.sigma_network = nn.Sequential(nn.Linear(hidden_dims[-1], output_dim), Exponential())
+
+
+    def calc_mean_sigma(self, x):
+        hidden = self.hidden_network(x)
+
+        mean = self.mean_network(hidden)
+        sigma = self.sigma_network(hidden)
+
+        return mean, sigma
+
+
+    def forward(self, x):
+        """
+        Calculate output samples from layer given input
+        """
+        mean, sigma = self.calc_mean_sigma(x)
+        epsilon_samples = torch.randn(mean.size()).to(device=self.device)
+        samples = mean + epsilon_samples * sigma
+
+        return samples
+
+
+    def calc_log_likelihood(self, x, samples):
+        """
+        Calculate p(x|samples,theta)
+        """
+        mean, sigma = self.calc_mean_sigma(samples)
+        p = calc_log_likelihood_of_samples_gaussian(x, mean, sigma)
+
+        return p
+
 
 
 class VAE(nn.Module):
@@ -68,47 +142,15 @@ class VAE(nn.Module):
         input_dim = c_in * w_in_width * w_in_height
 
         # Encoder Network
-        enc_hidden_dims = [input_dim] + hidden_dims
-        self.encoder = nn.Sequential(*chain.from_iterable(
-            [nn.Linear(h_in, h_out, bias=use_bias), nn.Tanh()]
-            for h_in, h_out in zip(enc_hidden_dims[:-1], enc_hidden_dims[1:])
-        ))
-
-        # Encoder Sampler
-        self.encoder_mean = nn.Linear(hidden_dims[-1], q_dim, bias=use_bias)
-        self.encoder_sigma = nn.Sequential(nn.Linear(hidden_dims[-1], q_dim), Exponential())
+        self.encoder = GaussianStochasticLayer(input_dim, hidden_dims, q_dim, device, use_bias, None)
 
         # Decoder Network
-        dec_hidden_dims = [p_dim] + list(reversed(hidden_dims))
-        self.decoder = nn.Sequential(*chain.from_iterable(
-            [nn.Linear(h_in, h_out, bias=use_bias), nn.Tanh()]
-            for h_in, h_out in zip(dec_hidden_dims[:-1], dec_hidden_dims[1:])
-        ))
-
-        # Decoder Sampler
-        self.decoder_mean = nn.Linear(hidden_dims[0], input_dim, bias=use_bias)
-        if not output_bias is None:
-            with torch.no_grad():
-                self.decoder_mean.bias.copy_(output_bias)
-        self.decoder_sigma = nn.Sequential(nn.Linear(hidden_dims[0], input_dim), Exponential())
+        self.decoder = GaussianStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, device, use_bias, output_bias)
 
 
     def forward(self, x):
-        determinstic_h = self.encoder(x)
-        enc_mean = self.encoder_mean(determinstic_h)
-        enc_sigma = self.encoder_sigma(determinstic_h)
-
-        epsilon_samples = torch.randn(enc_mean.size()).to(device=self.device)
-
-        h_samples = enc_mean + epsilon_samples * enc_sigma
-
-        determinstic_h_dec = self.decoder(h_samples)
-        dec_mean = self.decoder_mean(determinstic_h_dec)
-        dec_sigma = self.decoder_sigma(determinstic_h_dec)
-
-        epsilon_samples_dec = torch.randn(dec_mean.size()).to(device=self.device)
-
-        x_samples = dec_mean + epsilon_samples_dec * dec_sigma
+        h_samples = self.encoder(x)
+        x_samples = self.decoder(h_samples)
 
         return x_samples
 
@@ -117,17 +159,11 @@ class VAE(nn.Module):
         """
         Calculate p(x,h|theta)
         """
-
         # Calculate prior: log p(h|theta)
-
-        prior = calc_log_likelihood_of_samples(h_samples, torch.zeros_like(h_samples), torch.ones_like(h_samples))
+        prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples), torch.ones_like(h_samples))
 
         # Calculate p(x|h,theta)
-        deterministic_h = self.decoder(h_samples)
-        mean = self.decoder_mean(deterministic_h)
-        sigma = self.decoder_sigma(deterministic_h)
-
-        p = calc_log_likelihood_of_samples(x, mean, sigma)
+        p = self.decoder.calc_log_likelihood(x, h_samples)
 
         return prior + p
 
@@ -136,11 +172,7 @@ class VAE(nn.Module):
         """
         Calculate q(h|x)
         """
-        deterministic_h = self.encoder(x)
-        mean = self.encoder_mean(deterministic_h)
-        sigma = self.encoder_sigma(deterministic_h)
-
-        q = calc_log_likelihood_of_samples(h_samples, mean, sigma)
+        q = self.encoder.calc_log_likelihood(h_samples, x)
 
         return q
 
@@ -150,13 +182,7 @@ class VAE(nn.Module):
         Estimate the negative lower bound on the log-likelihood
         (the negative lower bound is used to have a function that should be minimized)
         """
-        deterministic_h = self.encoder(x)
-        enc_mean = self.encoder_mean(deterministic_h)
-        enc_sigma = self.encoder_sigma(deterministic_h)
-
-        epsilon_samples = torch.randn(enc_mean.size()).to(device=self.device)
-
-        h_samples = enc_mean + epsilon_samples * enc_sigma
+        h_samples = self.encoder.forward(x)
 
         log_p = self.calc_log_p(x, h_samples)
         log_q = self.calc_log_q(h_samples, x)
