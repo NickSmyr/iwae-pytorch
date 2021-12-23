@@ -55,7 +55,8 @@ if model_type == 'AE':
     model = AE()
 elif model_type == 'VAE':
     # Single stochastic layer architecture from IWAE paper
-    model = VAE(q_dim=50, hidden_dims=[200, 200], device=device, output_bias=output_bias)
+    # Disable initialization of output bias for now
+    model = VAE(q_dim=50, hidden_dims=[200, 200], device=device)#, output_bias=output_bias)
 elif model_type == 'IWAE':
     model = IWAE()
 else:
