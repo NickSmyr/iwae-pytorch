@@ -1,14 +1,14 @@
 import torch
 
 
-def validate(dataloader, model, loss_fn, device):
+def validate(dataloader, model, device):
     loss = 0
 
     with torch.no_grad():
         for X, y in dataloader:
             X = X.to(device)
-            pred = model(X)
-            loss += loss_fn(pred,  X).item()
+            objective = model.objective(X)
+            loss += objective.item()
 
     num_batches = len(dataloader)
     loss /= num_batches

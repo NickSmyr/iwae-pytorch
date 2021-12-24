@@ -1,4 +1,4 @@
-def train(dataloader, model, loss_fn, optimizer, device):
+def train(dataloader, model, optimizer, device):
 
     size = len(dataloader.dataset)
 
@@ -6,15 +6,14 @@ def train(dataloader, model, loss_fn, optimizer, device):
         # Move data to GPU
         X = X.to(device)
         
-        # Compute prediction and loss
-        pred = model(X)
-        loss = loss_fn(pred, X)
+        # Compute objective function
+        objective = model.objective(X)
 
         # Backpropagation
         optimizer.zero_grad()
-        loss.backward()
+        objective.backward()
         optimizer.step()
 
         if batch % 100 == 0:
-            loss, current = loss.item(), batch * len(X)
+            loss, current = objective.item(), batch * len(X)
             print(f"loss: {loss:>7f} [{current:>5d}/{size:>5d}]")
