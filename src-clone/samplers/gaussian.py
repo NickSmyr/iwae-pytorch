@@ -10,15 +10,16 @@ from ifaces import DistributionSampler
 
 
 class UnitGaussianSampler(nn.Module, DistributionSampler):
-    def __init__(self):
+    def __init__(self, device: str = 'cpu'):
         nn.Module.__init__(self)
+        self.device = device
 
     def forward(self, x):
         return self.sample(x)
 
     def sample(self, shape_or_x: tuple or torch.Tensor) -> torch.Tensor:
         if type(shape_or_x) == tuple:
-            return torch.randn(shape_or_x)
+            return torch.randn(shape_or_x).to(self.device)
         return torch.randn_like(shape_or_x)
 
     def log_likelihood(self, samples: torch.Tensor, x: torch.Tensor = None) -> torch.Tensor:
@@ -59,6 +60,13 @@ class GaussianSampler(nn.Module, DistributionSampler):
         sigma = self.sigma_network(h)
         return mean, sigma
 
+    def get_mean(self, x: torch.Tensor):
+        """
+        :param torch.Tensor x: input to the input layer
+        """
+        h = self.h_network(x)
+        return self.mean_network(h)
+
     def sample(self, shape_or_x: tuple or torch.Tensor):
         assert type(shape_or_x) == torch.Tensor
         mean, sigma = self.get_mean_sigma(shape_or_x)
@@ -76,7 +84,7 @@ class GaussianSampler(nn.Module, DistributionSampler):
 
     def first_linear_layer_weights_np(self) -> np.ndarray:
         assert type(self.h_network[0]) == nn.Linear
-        return self.h_network[0].weight.detach().numpy()
+        return self.h_network[0].weight.data.clone().detach().cpu().numpy().T
 
     @staticmethod
     @torch.no_grad()

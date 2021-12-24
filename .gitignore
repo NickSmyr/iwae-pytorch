@@ -1,1 +1,4 @@
 .idea
+data/mnist
+data/binary_mnist
+data/omniglot

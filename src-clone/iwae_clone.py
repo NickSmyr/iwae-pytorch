@@ -3,6 +3,7 @@ from torch import nn
 
 from samplers.bernoulli import BernoulliSampler
 from samplers.gaussian import GaussianSampler, UnitGaussianSampler
+from utils_clone.pytorch import reshape_and_tile_images
 
 
 class IWAEClone(nn.Module):
@@ -98,5 +99,52 @@ class IWAEClone(nn.Module):
                     .to(device)
             )
 
-        prior = UnitGaussianSampler()
+        prior = UnitGaussianSampler(device=device)
         return IWAEClone(layers_q, layers_p, prior)
+
+    # ----------------------------------------------------------------
+    #  Functions for reproducing paper results - visualizations
+    # ----------------------------------------------------------------
+
+    def get_samples(self, num_samples):
+        prior_samples = self.prior.sample((num_samples, self.first_p_layer_weights_np().shape[0]))
+        samples = [prior_samples]
+        for layer in self.p_layers[:-1]:
+            samples.append(layer.sample(samples[-1]))
+        samples_function = self.p_layers[-1].get_mean(samples[-1])
+        return reshape_and_tile_images(samples_function.detach().cpu().numpy())
+
+    def measure_marginal_log_likelihood(self, dataset, subdataset, minibatch_size=15, num_samples=50):
+        print("Measuring {} log likelihood".format(subdataset))
+        test_x = dataset.data[subdataset]
+        n_examples = test_x.get_value(borrow=True).shape[0]
+
+        if n_examples % minibatch_size == 0:
+            num_minibatches = n_examples // minibatch_size
+        else:
+            num_minibatches = n_examples // minibatch_size + 1
+
+        index = T.lscalar('i')
+        minibatch = dataset.minibatchIindex_minibatch_size(index, minibatch_size, subdataset=subdataset)
+
+        log_marginal_likelihood_estimate = self.log_marginal_likelihood_estimate(minibatch, num_samples)
+
+        get_log_marginal_likelihood = theano.function([index], T.sum(log_marginal_likelihood_estimate))
+
+        pbar = progressbar.ProgressBar(maxval=num_minibatches).start()
+        sum_of_log_likelihoods = 0.
+        for i in xrange(num_minibatches):
+            summand = get_log_marginal_likelihood(i)
+            sum_of_log_likelihoods += summand
+            pbar.update(i)
+        pbar.finish()
+
+        marginal_log_likelihood = sum_of_log_likelihoods / n_examples
+
+        return marginal_log_likelihood
+
+    def get_first_q_layer_weights(self):
+        return reshape_and_tile_images(model.first_q_layer_weights_np().T)
+
+    def get_last_p_layer_weights(self):
+        return reshape_and_tile_images(self.last_p_layer_weights_np())

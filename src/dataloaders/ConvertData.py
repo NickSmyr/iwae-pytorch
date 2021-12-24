@@ -1,8 +1,8 @@
 import os
 import struct
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import scipy.io
 
 
@@ -13,9 +13,9 @@ def convert_MNIST(dir, plot_samples=False):
             nimages, rows, cols = struct.unpack('>iii', f.read(12))
 
             images = np.fromfile(f, dtype=np.dtype(np.ubyte))
-            images = (images/255.0).astype('float32').reshape((nimages, rows, cols))
+            images = (images / 255.0).astype('float32').reshape((nimages, rows, cols))
 
-        print(images.shape)
+        # print(images.shape)
         return images
 
     def store(full_path, data):
@@ -39,12 +39,12 @@ def convert_BinaryMNIST(dir, plot_samples=False):
     def load(full_path):
         with open(full_path) as f:
             lines = f.readlines()
-            
+
         data = np.array([[int(i) for i in line.split()] for line in lines])
         images = data.astype('float32')
         images = images.reshape((-1, 28, 28))
 
-        print(images.shape)
+        # print(images.shape)
         return images
 
     def store(full_path, data):
@@ -64,6 +64,10 @@ def convert_BinaryMNIST(dir, plot_samples=False):
             plt.show()
 
 
+def convert_BINARY_MNIST(*args, **kwargs):
+    return convert_BinaryMNIST(*args, **kwargs)
+
+
 def convert_OMNIGLOT(dir, plot_samples=False):
     def load(full_path):
         omni_raw = scipy.io.loadmat(full_path)
@@ -74,8 +78,8 @@ def convert_OMNIGLOT(dir, plot_samples=False):
         train_data = reshape_data(omni_raw['data'].T.astype('float32'))
         test_data = reshape_data(omni_raw['testdata'].T.astype('float32'))
 
-        print(train_data.shape)
-        print(test_data.shape)
+        # print(train_data.shape)
+        # print(test_data.shape)
         return train_data, test_data
 
     def store(imgs_filename, data):
@@ -99,6 +103,6 @@ def convert_OMNIGLOT(dir, plot_samples=False):
 
 
 if __name__ == '__main__':
-   convert_MNIST(dir="data\MNIST")
-   convert_BinaryMNIST(dir="data\BinaryMNIST")
-   convert_OMNIGLOT(dir="data\OMNIGLOT")
+    convert_MNIST(dir="data\MNIST")
+    convert_BinaryMNIST(dir="data\BinaryMNIST")
+    convert_OMNIGLOT(dir="data\OMNIGLOT")

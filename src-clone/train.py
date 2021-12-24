@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 from ifaces import DistributionSampler
-from iwae import IWAEClone
+from iwae_clone import IWAEClone
 
 
 def train(model: IWAEClone, dataset: Dataset, optimizer: Optimizer, k: int, batch_size: int, n_epochs: int,

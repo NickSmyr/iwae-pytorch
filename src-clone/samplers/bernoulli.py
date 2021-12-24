@@ -29,10 +29,11 @@ class BernoulliSampler(nn.Module, DistributionSampler):
         return torch.sum(samples * torch.log(mean) + (1 - samples) * torch.log(1 - mean), dim=1)
 
     def last_linear_layer_weights_np(self):
-        return self.mean_network[-2].weight.detach().numpy()
+        print('in last_linear_layer_weights_np()')
+        return self.mean_network[-2].weight.data.clone().detach().cpu().numpy()
 
     def first_linear_layer_weights_np(self):
-        return self.mean_network[0].weight.detach().numpy()
+        return self.mean_network[0].weight.data.clone().detach().cpu().numpy().T
 
     @staticmethod
     def random(n_units: list, bias: Optional[float] = None):
