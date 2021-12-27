@@ -19,7 +19,7 @@ class OmniglotDataset(Dataset, DownloadableDataset):
         Dataset.__init__(self)
 
     def __getitem__(self, index) -> torch.Tensor:
-        return self.data[index]
+        return torch.from_numpy(self.data[index].flatten())
 
     def __len__(self) -> int:
         return len(self.data)
@@ -33,6 +33,7 @@ class OmniglotDataset(Dataset, DownloadableDataset):
 
 class OmniglotDataloader(DataLoader):
     def __init__(self, train_not_test: bool = True, **kwargs):
+        self.dataset = None  # type: OmniglotDataset
         DataLoader.__init__(self, dataset=OmniglotDataset(train_not_test=train_not_test), **kwargs)
 
 

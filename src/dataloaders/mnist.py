@@ -21,7 +21,7 @@ class MnistDataset(Dataset, DownloadableDataset):
         Dataset.__init__(self)
 
     def __getitem__(self, index) -> torch.Tensor:
-        return self.data[index]
+        return torch.from_numpy(self.data[index].flatten())
 
     def __len__(self) -> int:
         return len(self.data)
@@ -41,6 +41,10 @@ class MnistDataset(Dataset, DownloadableDataset):
             os.remove(f)
         return True
 
+    @property
+    def title(self) -> str:
+        return 'mnist'
+
 
 class BinaryMnistDataset(Dataset, DownloadableDataset):
     def __init__(self, train_not_test: bool = True):
@@ -53,7 +57,7 @@ class BinaryMnistDataset(Dataset, DownloadableDataset):
         Dataset.__init__(self)
 
     def __getitem__(self, index) -> torch.Tensor:
-        return self.data[index]
+        return torch.from_numpy(self.data[index].flatten())
 
     def __len__(self) -> int:
         return len(self.data)
@@ -70,14 +74,20 @@ class BinaryMnistDataset(Dataset, DownloadableDataset):
                                 'binarized_mnist_test.amat', clean_first=False)
         return True
 
+    @property
+    def title(self) -> str:
+        return 'binary_mnist'
+
 
 class MnistDataloader(DataLoader):
     def __init__(self, train_not_test: bool = True, **kwargs):
+        self.dataset = None  # type: MnistDataset
         DataLoader.__init__(self, dataset=MnistDataset(train_not_test=train_not_test), **kwargs)
 
 
 class BinaryMnistDataloader(DataLoader):
     def __init__(self, train_not_test: bool = True, **kwargs):
+        self.dataset = None  # type: BinaryMnistDataset
         DataLoader.__init__(self, dataset=BinaryMnistDataset(train_not_test=train_not_test), **kwargs)
 
 

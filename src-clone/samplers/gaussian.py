@@ -1,4 +1,5 @@
 import math
+import sys
 from itertools import chain
 from typing import Optional
 
@@ -27,7 +28,7 @@ class UnitGaussianSampler(nn.Module, DistributionSampler):
         Given samples as rows of a matrix, returns their log-likelihood under the zero mean unit covariance
         Gaussian as a COLUMN vector.
         """
-        return -0.5 * samples.shape[1] * math.log(2 * np.pi) - 0.5 * samples.pow(2).sum(dim=1)
+        return -0.5 * samples.shape[1] * math.log(2 * math.pi) - 0.5 * torch.sum(samples.square(), dim=1)
 
 
 # noinspection PyMethodMayBeStatic
@@ -70,13 +71,14 @@ class GaussianSampler(nn.Module, DistributionSampler):
     def sample(self, shape_or_x: tuple or torch.Tensor):
         assert type(shape_or_x) == torch.Tensor
         mean, sigma = self.get_mean_sigma(shape_or_x)
-        unit_gaussian_samples = self.prior(mean)
+        unit_gaussian_samples = torch.randn_like(mean)
         return sigma * unit_gaussian_samples + mean
 
     @staticmethod
     def log_likelihood_for_mean_sigma(samples: torch.Tensor, mean: torch.Tensor, sigma: torch.Tensor):
         return -0.5 * samples.shape[1] * math.log(2 * np.pi) \
-               - 0.5 * torch.sum(((samples - mean) / sigma).square() + torch.log(sigma), dim=1)
+               - 0.5 * torch.sum(((samples - mean) / (sigma + sys.float_info.epsilon)).square() + 2.0 *
+                                 torch.log(sigma + sys.float_info.epsilon), dim=1)
 
     def log_likelihood(self, samples: torch.Tensor, x: torch.Tensor):
         mean, sigma = self.get_mean_sigma(x)
@@ -94,7 +96,7 @@ class GaussianSampler(nn.Module, DistributionSampler):
             m.bias.data.fill_(0.0)
 
     @staticmethod
-    def random(n_units: list, mean: Optional[float] = None):
+    def random(n_units: list, mean: Optional[torch.Tensor or float] = None):
         h_network = nn.Sequential(*list(chain.from_iterable(
             [nn.Linear(in_features=h_in, out_features=h_out), nn.Tanh()]
             for h_in, h_out in zip(n_units[:-2], n_units[1:-1])
@@ -103,7 +105,10 @@ class GaussianSampler(nn.Module, DistributionSampler):
         mean_network = nn.Linear(n_units[-2], n_units[-1])
         mean_network.apply(GaussianSampler.init_weights)
         if mean is not None:
-            mean_network.bias.data.fill_(mean)
-        sigma_network = nn.Sequential(nn.Linear(n_units[-2], n_units[-1]), Exponential())
+            mean_network.bias.data.copy_(mean)
+        sigma_network = nn.Sequential(
+            nn.Linear(n_units[-2], n_units[-1]),
+            Exponential(),
+        )
         sigma_network.apply(GaussianSampler.init_weights)
         return GaussianSampler(h_network, mean_network, sigma_network)

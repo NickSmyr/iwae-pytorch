@@ -30,7 +30,7 @@ class DistributionSampler(metaclass=abc.ABCMeta):
     @staticmethod
     def set_seed(seed: int) -> int:
         assert os.environ.get('RNG_SEED') is None, 'seed had already been set'
-        os.environ['RNG_SEED'] = seed
+        os.environ['RNG_SEED'] = str(seed)
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
@@ -42,6 +42,7 @@ class DownloadableDataset(metaclass=abc.ABCMeta):
     def __init__(self, which: str):
         self.which = which
         self.converter = getattr(converters, f'convert_{self.which.upper()}')
+        self.data = None
         self.current_checksums = None
 
         # Download Dataset
@@ -98,6 +99,13 @@ class DownloadableDataset(metaclass=abc.ABCMeta):
             self.converter(self.path)
             with open(checksum_json_path, 'w') as json_fp:
                 json.dump(self.current_checksums, json_fp, indent=4)
+
+    def get_train_bias_np(self) -> np.ndarray:
+        data_mean = np.mean(self.data, axis=0)[None, :]
+        return -np.log(1. / np.clip(data_mean, 0.001, 0.999) - 1.)
+
+    def get_train_bias(self) -> torch.Tensor:
+        return torch.from_numpy(self.get_train_bias_np().flatten())
 
     @staticmethod
     def set_data_directory(abs_path: str) -> None:
