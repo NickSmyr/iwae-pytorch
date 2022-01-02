@@ -21,7 +21,7 @@ from iwae_clone import IWAEClone
 
 
 def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler: LambdaLR, n_epochs: int,
-          model_type: str = 'iwae'):
+          model_type: str = 'iwae', debug : bool = False):
     # Load checkpoint
     chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
     if not os.path.exists(chkpts_dir_path) or not os.path.isdir(chkpts_dir_path):
@@ -83,6 +83,9 @@ def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int
             plt.axis('off')
             plt.title(f'[{model_type.upper()}] 100 samples after epoch={e:03d}')
             plt.show()
+
+        if debug:
+            break
     # Return trained model
     return model
 
@@ -126,7 +129,7 @@ def plot_lr():
 if __name__ == '__main__':
     # Initialize training
     DistributionSampler.set_seed(seed=42)
-    DownloadableDataset.set_data_directory('/home/achariso/PycharmProjects/kth-ml-course-projects/iwae-pytorch/data')
+    DownloadableDataset.set_data_directory('../data')
 
     # Plot Learning Rate Scheduling
     plot_lr()
@@ -135,11 +138,13 @@ if __name__ == '__main__':
     _latent_units = [50]
     _hidden_units_q = [[200, 200]]
     _hidden_units_p = [[200, 200]]
-    _k = 10
+    _k = 50
     _batch_size = 100
+    # Stub the training process soo that we can test that the result format is usable
+    debug=True
     # _dataloader = MnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
-    _dataloader = BinaryMnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
-    # _dataloader = OmniglotDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+    #_dataloader = BinaryMnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+    _dataloader = OmniglotDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
     _model = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
                               hidden_units_p=_hidden_units_p, data_type='binary', device=_device,
                               bias=_dataloader.dataset.get_train_bias())
@@ -148,5 +153,20 @@ if __name__ == '__main__':
     # _optimizer = optim.SGD(params=_model.params, lr=1e-3)
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
     train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3 ** 8,
-          model_type='iwae')
+          model_type='iwae', debug=debug)
     print('[DONE]')
+
+    # Save the final checkpoint
+    chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
+    state_fname_s = f'{_dataloader.dataset.title}_k{_k:02d}_L{len(_model.p_layers)}_e__EPOCH__.pkl'
+
+    #state_fpath_e = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
+    state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{"final"}'))
+    torch.save({
+        'model': _model.state_dict(),
+        'optimizer': _optimizer.state_dict(),
+        'scheduler': _scheduler.state_dict()
+    }, state_fpath)
+    print('')
+    print(f'[CHECKPOINT] Saved checkpoint after training')
+    print('')

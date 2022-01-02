@@ -30,11 +30,17 @@ class OmniglotDataset(Dataset, DownloadableDataset):
                                 'chardata.mat', clean_first=True)
         return True
 
+    @property
+    def title(self) -> str:
+        return 'omniglot'
+
 
 class OmniglotDataloader(DataLoader):
     def __init__(self, train_not_test: bool = True, **kwargs):
         self.dataset = None  # type: OmniglotDataset
         DataLoader.__init__(self, dataset=OmniglotDataset(train_not_test=train_not_test), **kwargs)
+
+
 
 
 if __name__ == '__main__':
