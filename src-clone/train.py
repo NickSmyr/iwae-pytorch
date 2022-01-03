@@ -19,9 +19,6 @@ from dataloaders.omniglot import OmniglotDataloader
 from ifaces import DistributionSampler, DownloadableDataset
 from iwae_clone import IWAEClone
 
-# We need to see if it prevent sigma vanishing
-torch.set_default_dtype(torch.float64)
-
 def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler: LambdaLR, n_epochs: int,
           model_type: str = 'iwae', debug: bool = False):
     # Load checkpoint
