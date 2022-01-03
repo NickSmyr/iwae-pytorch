@@ -65,6 +65,8 @@ else:
 
 model = model.to(device)
 
+losses = []
+
 for i in range(epochs_exp):
     # Learning rate schedule as in the IWAE paper
     learning_rate = 0.001 * 10.0 ** (-i / 7.0)
@@ -83,8 +85,16 @@ for i in range(epochs_exp):
     for t in range(num_epochs):
         print(f"Epoch exponent {i}/{epochs_exp - 1}, epoch {t + 1}/{num_epochs}\n----------------")
         train(train_dataloader, model, optimizer, device)
-        validate(test_dataloader, model, device)
+        loss = validate(test_dataloader, model, device)
+        losses.append(loss)
+        print(f"Validation average loss: {loss:>8f} \n")
 
+
+# Plot validation losses per epoch
+plt.figure()
+plt.plot(losses)
+plt.xlabel('Epoch')
+plt.ylabel('Estimate of negative lower bound on the log-likelihood')
 
 # Visualize some results
 

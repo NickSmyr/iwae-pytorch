@@ -12,4 +12,5 @@ def validate(dataloader, model, device):
 
     num_batches = len(dataloader)
     loss /= num_batches
-    print(f"Validation average loss: {loss:>8f} \n")
+
+    return loss
