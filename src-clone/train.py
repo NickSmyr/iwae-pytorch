@@ -19,6 +19,8 @@ from dataloaders.omniglot import OmniglotDataloader
 from ifaces import DistributionSampler, DownloadableDataset
 from iwae_clone import IWAEClone
 
+# We need to see if it prevent sigma vanishing
+torch.set_default_dtype(torch.float64)
 
 def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler: LambdaLR, n_epochs: int,
           model_type: str = 'iwae', debug: bool = False):
@@ -126,7 +128,8 @@ def plot_lr():
     plt.show()
 
 # TODO add second layer option
-def train_and_save_checkpoints(cuda : bool,
+def train_and_save_checkpoints(seed : int,
+                               cuda : bool,
                                k : int,
                                num_layers : int,
                                dataset : str,
@@ -136,6 +139,7 @@ def train_and_save_checkpoints(cuda : bool,
                                ):
     """
     Method to train one configuration, and output a checkpoint file
+    :param seed: Seed value
     :param cuda: True for GPU acceleration
     :param k: The number of samples
     :param num_layers: The number of stochastic layers
@@ -147,7 +151,7 @@ def train_and_save_checkpoints(cuda : bool,
     if cuda:
         assert torch.cuda.is_available(), "No CUDA CPU available."
     # Initialize training
-    DistributionSampler.set_seed(seed=42)
+    DistributionSampler.set_seed(seed=seed)
     DownloadableDataset.set_data_directory('../data')
 
     _device = torch.device('cuda') if cuda else torch.device('cpu')
@@ -205,7 +209,8 @@ def train_and_save_checkpoints(cuda : bool,
     print('')
 
 if __name__ == '__main__':
-   train_and_save_checkpoints(cuda=False,
+   train_and_save_checkpoints(seed=42,
+                              cuda=False,
                               k=50,
                               num_layers=2,
                               dataset='mnist',
