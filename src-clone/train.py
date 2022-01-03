@@ -125,26 +125,44 @@ def plot_lr():
     plt.ylabel('learning rate')
     plt.show()
 
-
-if __name__ == '__main__':
+# TODO add second layer option
+def train_and_save_checkpoints(cuda : bool,
+                               k : int,
+                               dataset : str,
+                               model_type : str,
+                               batch_size : int,
+                               debug : bool,
+                               ):
+    """
+    Method to train one configuration, and output a checkpoint file
+    :param cuda: True for GPU acceleration
+    :param k: The number of samples
+    :param dataset: The dataset to train on. One of ["binarymnist", "omniglot"]
+    :param model_type: The model to use. One of ["vae", "iwae"]
+    :param batch_size: The batch size to use
+    :param debug: If True, will execute only one epoch of the training process
+    """
     # Initialize training
     DistributionSampler.set_seed(seed=42)
     DownloadableDataset.set_data_directory('../data')
 
-    # Plot Learning Rate Scheduling
-    plot_lr()
-
-    _device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    _device = torch.device('cuda') if cuda else torch.device('cpu')
     _latent_units = [50]
     _hidden_units_q = [[200, 200]]
     _hidden_units_p = [[200, 200]]
-    _k = 50
-    _batch_size = 100
+    _k = k
+    _batch_size = batch_size
     # Stub the training process soo that we can test that the result format is usable
-    _debug = True
-    # _dataloader = MnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
-    # _dataloader = BinaryMnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
-    _dataloader = OmniglotDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+    _debug = debug
+
+    available_datasets = ['binarymnist', 'omniglot']
+    if dataset == available_datasets[0]:
+        _dataloader = MnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+    elif dataset == available_datasets[1]:
+        _dataloader = OmniglotDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+    else:
+        raise Exception("Unknown dataset name ", dataset)
+
     _model = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
                               hidden_units_p=_hidden_units_p, data_type='binary', device=_device,
                               bias=_dataloader.dataset.get_train_bias())
@@ -153,15 +171,14 @@ if __name__ == '__main__':
     # _optimizer = optim.SGD(params=_model.params, lr=1e-3)
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
     train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3 ** 8,
-          model_type='iwae', debug=_debug)
+          model_type=model_type, debug=_debug)
     print('[DONE]')
 
     # Save the final checkpoint
     _chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
-    _state_fname_s = f'{_dataloader.dataset.title}_k{_k:02d}_L{len(_model.p_layers)}_e__EPOCH__.pkl'
-
-    # state_fpath_e = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
-    _state_fpath = os.path.join(_chkpts_dir_path, _state_fname_s.replace('__EPOCH__', f'{"final"}'))
+    _state_fname_s = f'{_dataloader.dataset.title}_k{_k:02d}_L{len(_model.p_layers)}' \
+                     f'_bs{batch_size}_{model_type}_final.pkl'
+    _state_fpath = os.path.join(_chkpts_dir_path, _state_fname_s)
     torch.save({
         'model': _model.state_dict(),
         'optimizer': _optimizer.state_dict(),
@@ -170,3 +187,11 @@ if __name__ == '__main__':
     print('')
     print(f'[CHECKPOINT] Saved checkpoint after training')
     print('')
+
+if __name__ == '__main__':
+   train_and_save_checkpoints(cuda=True,
+                              k=50,
+                              dataset='omniglot',
+                              model_type='vae',
+                              batch_size=100,
+                              debug=True)
