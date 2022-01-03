@@ -134,7 +134,7 @@ if __name__ == '__main__':
     # Plot Learning Rate Scheduling
     plot_lr()
 
-    _device = 'cuda'
+    _device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     _latent_units = [50]
     _hidden_units_q = [[200, 200]]
     _hidden_units_p = [[200, 200]]
