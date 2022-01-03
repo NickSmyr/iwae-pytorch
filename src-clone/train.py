@@ -139,7 +139,7 @@ def train_and_save_checkpoints(cuda : bool,
     :param cuda: True for GPU acceleration
     :param k: The number of samples
     :param num_layers: The number of stochastic layers
-    :param dataset: The dataset to train on. One of ["binarymnist", "omniglot"]
+    :param dataset: The dataset to train on. One of ["mnist", "binarymnist", "omniglot"]
     :param model_type: The model to use. One of ["vae", "iwae"]
     :param batch_size: The batch size to use
     :param debug: If True, will execute only one epoch of the training process
@@ -165,11 +165,14 @@ def train_and_save_checkpoints(cuda : bool,
     else:
         raise Exception("The number of layers must be either 1 or 2")
 
-    available_datasets = ['binarymnist', 'omniglot']
+    available_datasets = ['mnist', 'binarymnist', 'omniglot']
     if dataset == available_datasets[0]:
         _dataloader = MnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
     elif dataset == available_datasets[1]:
+        _dataloader = BinaryMnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+    elif dataset == available_datasets[2]:
         _dataloader = OmniglotDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+
     else:
         raise Exception("Unknown dataset name ", dataset)
 
