@@ -128,6 +128,7 @@ def plot_lr():
 # TODO add second layer option
 def train_and_save_checkpoints(cuda : bool,
                                k : int,
+                               num_layers : int,
                                dataset : str,
                                model_type : str,
                                batch_size : int,
@@ -137,6 +138,7 @@ def train_and_save_checkpoints(cuda : bool,
     Method to train one configuration, and output a checkpoint file
     :param cuda: True for GPU acceleration
     :param k: The number of samples
+    :param num_layers: The number of stochastic layers
     :param dataset: The dataset to train on. One of ["binarymnist", "omniglot"]
     :param model_type: The model to use. One of ["vae", "iwae"]
     :param batch_size: The batch size to use
@@ -147,13 +149,21 @@ def train_and_save_checkpoints(cuda : bool,
     DownloadableDataset.set_data_directory('../data')
 
     _device = torch.device('cuda') if cuda else torch.device('cpu')
-    _latent_units = [50]
-    _hidden_units_q = [[200, 200]]
-    _hidden_units_p = [[200, 200]]
     _k = k
     _batch_size = batch_size
     # Stub the training process soo that we can test that the result format is usable
     _debug = debug
+
+    if num_layers == 1:
+        _latent_units = [50]
+        _hidden_units_q = [[200, 200]]
+        _hidden_units_p = [[200, 200]]
+    elif num_layers == 2:
+        _latent_units = [100, 50]
+        _hidden_units_q = [[200, 200], [100, 100]]
+        _hidden_units_p = [[100, 100], [200, 200]]
+    else:
+        raise Exception("The number of layers must be either 1 or 2")
 
     available_datasets = ['binarymnist', 'omniglot']
     if dataset == available_datasets[0]:
@@ -191,7 +201,8 @@ def train_and_save_checkpoints(cuda : bool,
 if __name__ == '__main__':
    train_and_save_checkpoints(cuda=True,
                               k=50,
-                              dataset='omniglot',
-                              model_type='vae',
+                              num_layers=2,
+                              dataset='mnist',
+                              model_type='iwae',
                               batch_size=100,
                               debug=True)
