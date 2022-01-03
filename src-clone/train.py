@@ -28,7 +28,7 @@ def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int
         os.mkdir(chkpts_dir_path)
     state_fname_s = f'{dataloader.dataset.title}_k{k:02d}_L{len(model.p_layers)}_e__EPOCH__.pkl'
     start_epoch = 0
-    for i in range(0, 9):
+    for i in range(0, 8):
         e = 3 ** i
         state_fpath_e = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
         state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{3 ** (i + 1):03d}'))
@@ -144,6 +144,8 @@ def train_and_save_checkpoints(cuda : bool,
     :param batch_size: The batch size to use
     :param debug: If True, will execute only one epoch of the training process
     """
+    if cuda:
+        assert torch.cuda.is_available(), "No CUDA CPU available."
     # Initialize training
     DistributionSampler.set_seed(seed=42)
     DownloadableDataset.set_data_directory('../data')
@@ -180,11 +182,12 @@ def train_and_save_checkpoints(cuda : bool,
                               hidden_units_p=_hidden_units_p, data_type='binary', device=_device,
                               bias=_dataloader.dataset.get_train_bias())
     print(_dataloader.dataset.get_train_bias_np().shape)
+
     _optimizer = optim.Adam(params=_model.params, lr=1e-3, betas=(0.99, 0.999), eps=1e-4)
     # _optimizer = optim.SGD(params=_model.params, lr=1e-3)
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
-    train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3 ** 8,
-          model_type=model_type, debug=_debug)
+    train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3280,
+              model_type=model_type, debug=_debug)
     print('[DONE]')
 
     # Save the final checkpoint
@@ -202,7 +205,7 @@ def train_and_save_checkpoints(cuda : bool,
     print('')
 
 if __name__ == '__main__':
-   train_and_save_checkpoints(cuda=True,
+   train_and_save_checkpoints(cuda=False,
                               k=50,
                               num_layers=2,
                               dataset='mnist',
