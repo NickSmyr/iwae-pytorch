@@ -33,14 +33,14 @@ training_data = datasets.MNIST(
     root='data',
     train=True,
     download=True,
-    transform=Compose([ToTensor(), Lambda(lambda x: torch.flatten(x))])
+    transform=Compose([ToTensor(), Lambda(lambda x: torch.bernoulli(torch.flatten(x)))])
 )
 
 test_data = datasets.MNIST(
     root='data',
     train=False,
     download=True,
-    transform=Compose([ToTensor(), Lambda(lambda x: torch.flatten(x))])
+    transform=Compose([ToTensor(), Lambda(lambda x: torch.bernoulli(torch.flatten(x)))])
 )
 
 train_dataloader = DataLoader(training_data, batch_size=batch_size, pin_memory=True)

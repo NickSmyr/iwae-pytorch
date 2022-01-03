@@ -31,6 +31,15 @@ def calc_log_likelihood_of_samples_gaussian(samples, mean, sigma):
     return result
 
 
+def calc_log_likelihood_of_samples_bernoulli(samples, mean):
+    """
+    Calculate log p(samples|mean) assuming a bernoulli distribution
+    """
+    result = samples * torch.log(mean) + (1.0 - samples) * torch.log(1.0 - mean)
+    result = torch.sum(result, dim=1)
+    return result
+
+
 class GaussianStochasticLayer(nn.Module):
     """
     A gaussian stochastic layer.
@@ -99,6 +108,71 @@ class GaussianStochasticLayer(nn.Module):
 
 
 
+class BernoulliStochasticLayer(nn.Module):
+    """
+    A bernoulli stochastic layer.
+    """
+    def __init__(
+        self,
+        input_dim,
+        hidden_dims,
+        output_dim,
+        device = "cpu",
+        use_bias: bool = True,
+        output_bias = None):
+        """
+        Constructor for a stochastic layer.
+        :param (int) input_dim: input dimension for layer
+        :param hidden_dims: number of neurons in encoder's hidden layers (and decoder's respective ones)
+        :param (int) output_dim: output dimension for layer
+        :param (bool) use_bias: set to True to add bias to the fully-connected (aka Linear) layers of the networks
+        """
+        nn.Module.__init__(self)
+
+        self.device = device
+
+        # Hidden network
+        self.hidden_network = nn.Sequential(*chain.from_iterable(
+            [nn.Linear(h_in, h_out, bias=use_bias), nn.Tanh()]
+            for h_in, h_out in zip([input_dim] + hidden_dims[:-1], hidden_dims[1:])
+        ))
+
+        # Sampler
+        mean_linear = nn.Linear(hidden_dims[-1], output_dim, bias=use_bias)
+        if not output_bias is None:
+            with torch.no_grad():
+                mean_linear.bias.copy_(output_bias)
+        self.mean_network = nn.Sequential(mean_linear, nn.Sigmoid())
+
+
+    def calc_mean(self, x):
+        hidden = self.hidden_network(x)
+        mean = self.mean_network(hidden)
+
+        return mean
+
+
+    def forward(self, x):
+        """
+        Calculate output samples from layer given input
+        """
+        mean = self.calc_mean(x)
+        samples = torch.bernoulli(mean).to(device=self.device)
+
+        return samples
+
+
+    def calc_log_likelihood(self, x, samples):
+        """
+        Calculate p(x|samples,theta)
+        """
+        mean = self.calc_mean(samples)
+        p = calc_log_likelihood_of_samples_bernoulli(x, mean)
+
+        return p
+
+
+
 class VAE(nn.Module):
     """
     VAE Class:
@@ -145,7 +219,7 @@ class VAE(nn.Module):
         self.encoder = GaussianStochasticLayer(input_dim, hidden_dims, q_dim, device, use_bias, None)
 
         # Decoder Network
-        self.decoder = GaussianStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, device, use_bias, output_bias)
+        self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, device, use_bias, output_bias)
 
 
     def forward(self, x):

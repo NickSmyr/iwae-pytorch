@@ -3,3 +3,4 @@ data/mnist
 data/binary_mnist
 data/omniglot
 checkpoints/*.pkl
+*.pyc
