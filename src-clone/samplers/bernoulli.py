@@ -22,7 +22,7 @@ class BernoulliSampler(nn.Module, DistributionSampler):
     def sample(self, shape_or_x: tuple or torch.Tensor) -> torch.Tensor:
         assert type(shape_or_x) == torch.Tensor
         mean = self.get_mean(x=shape_or_x)
-        return torch.le(torch.rand_like(mean), mean).type(mean.type)
+        return torch.le(torch.rand_like(mean), mean).type(mean.type())
 
     def log_likelihood(self, samples: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         mean = self.get_mean(x)
