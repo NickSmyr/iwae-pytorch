@@ -34,10 +34,10 @@ adam_epsilon = 1e-4
 debug = True
 
 # Set to 'AE', 'VAE' or 'IWAE'
-model_type = 'VAE'
+model_type = 'IWAE'
 
 # k hyper parameter
-k = 1
+k = 5
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -73,7 +73,7 @@ elif model_type == 'VAE':
     # Disable initialization of output bias for now
     model = VAE(k=k, q_dim=50, hidden_dims=[200, 200], device=device)#, output_bias=output_bias)
 elif model_type == 'IWAE':
-    model = IWAE()
+    model = IWAE(k=k, q_dim=50, hidden_dims=[200, 200], device=device)
 else:
     print(f"Unknown model type: {model_type}")
     exit(1)
