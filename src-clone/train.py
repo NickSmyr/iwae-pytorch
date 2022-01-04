@@ -1,3 +1,4 @@
+import importlib
 import math
 import os
 import time
@@ -13,7 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 # noinspection PyUnresolvedReferences
-from dataloaders.mnist import MnistDataloader, BinaryMnistDataloader
+import dataloaders
 # noinspection PyUnresolvedReferences
 from dataloaders.omniglot import OmniglotDataloader
 from ifaces import DistributionSampler, DownloadableDataset
@@ -26,9 +27,10 @@ def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int
     chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
     if not os.path.exists(chkpts_dir_path) or not os.path.isdir(chkpts_dir_path):
         os.mkdir(chkpts_dir_path)
-    state_fname_s = f'{dataloader.dataset.title}_k{k:02d}_L{len(model.p_layers)}_e__EPOCH__.pkl'
+    dataset_title = getattr(dataloader.dataset, 'title', type(dataloader.dataset).__name__)
+    state_fname_s = f'{dataset_title}_k{k:02d}_L{len(model.p_layers)}_e__EPOCH__.pkl'
     start_epoch = 0
-    for i in range(0, 9):
+    for i in range(0, 8):
         e = 3 ** i
         state_fpath_e = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
         state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{3 ** (i + 1):03d}'))
@@ -54,7 +56,9 @@ def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int
             # Zero out discriminator gradient (before backprop)
             optimizer.zero_grad()
             # Perform forward pass
-            L_k_q = model(x.to(model.device), k=k, model_type=model_type)
+            if type(x) == list:
+                x = x[0].squeeze()
+            L_k_q = model(x.type(torch.get_default_dtype()).to(model.device), k=k, model_type=model_type)
             ls.append(-L_k_q.item())
             pbar.set_description(f'[e|{e:03d}/{n_epochs:03d}][l|{np.mean(ls):.03f}] ')
             assert not np.isnan(np.mean(ls))
@@ -125,29 +129,36 @@ def plot_lr():
     plt.ylabel('learning rate')
     plt.show()
 
-# TODO add second layer option
-def train_and_save_checkpoints(cuda : bool,
-                               k : int,
-                               num_layers : int,
-                               dataset : str,
-                               model_type : str,
-                               batch_size : int,
-                               debug : bool,
+
+def train_and_save_checkpoints(seed: int,
+                               cuda: bool,
+                               k: int,
+                               num_layers: int,
+                               dataset: str,
+                               model_type: str,
+                               batch_size: int,
+                               debug: bool,
+                               dtype=torch.float64,
                                ):
     """
     Method to train one configuration, and output a checkpoint file
+    :param seed: Seed value
     :param cuda: True for GPU acceleration
     :param k: The number of samples
     :param num_layers: The number of stochastic layers
-    :param dataset: The dataset to train on. One of ["binarymnist", "omniglot"]
+    :param dataset: The dataset to train on. One of ["mnist", "binarymnist", "omniglot"]
     :param model_type: The model to use. One of ["vae", "iwae"]
     :param batch_size: The batch size to use
     :param debug: If True, will execute only one epoch of the training process
+    :param dtype: one of `torch.float64` (or `torch.double`), `torch.float32` (or `torch.float`)
     """
+    if cuda:
+        assert torch.cuda.is_available(), "No CUDA CPU available."
     # Initialize training
-    DistributionSampler.set_seed(seed=42)
+    DistributionSampler.set_seed(seed=seed)
     DownloadableDataset.set_data_directory('../data')
-
+    if dtype == torch.float64:
+        torch.set_default_dtype(torch.float64)
     _device = torch.device('cuda') if cuda else torch.device('cpu')
     _k = k
     _batch_size = batch_size
@@ -165,22 +176,25 @@ def train_and_save_checkpoints(cuda : bool,
     else:
         raise Exception("The number of layers must be either 1 or 2")
 
-    available_datasets = ['binarymnist', 'omniglot']
-    if dataset == available_datasets[0]:
-        _dataloader = MnistDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
-    elif dataset == available_datasets[1]:
-        _dataloader = OmniglotDataloader(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
-    else:
-        raise Exception("Unknown dataset name ", dataset)
+    # Instantiate Dataloader
+    dataloader_class_name = ''.join(x.title() for x in dataset.split('_')) + 'Dataloader'
+    try:
+        _module = importlib.import_module('dataloaders.' + dataset.split('_')[-1])
+        _dataloader_class = getattr(_module, dataloader_class_name)
+        _dataloader = _dataloader_class(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+    except AttributeError:
+        raise Exception(f'Unknown dataset name {dataset}')
 
+    # Instantiate model's Module
     _model = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
                               hidden_units_p=_hidden_units_p, data_type='binary', device=_device,
                               bias=_dataloader.dataset.get_train_bias())
-    print(_dataloader.dataset.get_train_bias_np().shape)
-    _optimizer = optim.Adam(params=_model.params, lr=1e-3, betas=(0.99, 0.999), eps=1e-4)
-    # _optimizer = optim.SGD(params=_model.params, lr=1e-3)
+    # Instantiate Optimizer & LR-Scheduler
+    # _optimizer = optim.Adam(params=_model.params, lr=1e-3, betas=(0.99, 0.999), eps=1e-4)
+    _optimizer = optim.SGD(params=_model.params, lr=1e-3)
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
-    train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3 ** 8,
+    # Start the training loop
+    train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3280,
           model_type=model_type, debug=_debug)
     print('[DONE]')
 
@@ -198,11 +212,14 @@ def train_and_save_checkpoints(cuda : bool,
     print(f'[CHECKPOINT] Saved checkpoint after training')
     print('')
 
+
 if __name__ == '__main__':
-   train_and_save_checkpoints(cuda=True,
-                              k=50,
-                              num_layers=2,
-                              dataset='mnist',
-                              model_type='iwae',
-                              batch_size=100,
-                              debug=True)
+    train_and_save_checkpoints(seed=42,
+                               cuda=True,
+                               k=50,
+                               num_layers=2,
+                               dataset='binary_mnist',
+                               model_type='iwae',
+                               batch_size=1000,
+                               debug=True,
+                               dtype=torch.float64)

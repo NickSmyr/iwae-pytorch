@@ -231,12 +231,12 @@ class VAE(nn.Module):
 
     def calc_log_p(self, x, h_samples):
         """
-        Calculate p(x,h|theta)
+        Calculate log p(x,h|theta)
         """
         # Calculate prior: log p(h|theta)
         prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples), torch.ones_like(h_samples))
 
-        # Calculate p(x|h,theta)
+        # Calculate log p(x|h,theta)
         p = self.decoder.calc_log_likelihood(x, h_samples)
 
         return prior + p
@@ -244,11 +244,23 @@ class VAE(nn.Module):
 
     def calc_log_q(self, h_samples, x):
         """
-        Calculate q(h|x)
+        Calculate log q(h|x)
         """
         q = self.encoder.calc_log_likelihood(h_samples, x)
 
         return q
+
+
+    def calc_log_w(self, x):
+        """
+        Calculate log w(x,h,theta) = log p(x,h|theta) - log q(h|x)
+        """
+        h_samples = self.encoder.forward(x)
+
+        log_p = self.calc_log_p(x, h_samples)
+        log_q = self.calc_log_q(h_samples, x)
+
+        return log_p - log_q
 
 
     def objective(self, x):
@@ -256,9 +268,6 @@ class VAE(nn.Module):
         Estimate the negative lower bound on the log-likelihood
         (the negative lower bound is used to have a function that should be minimized)
         """
-        h_samples = self.encoder.forward(x)
+        log_w = self.calc_log_w(x)
 
-        log_p = self.calc_log_p(x, h_samples)
-        log_q = self.calc_log_q(h_samples, x)
-
-        return -torch.mean(log_p - log_q)
+        return -torch.sum(log_w)
