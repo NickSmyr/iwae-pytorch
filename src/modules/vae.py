@@ -271,7 +271,7 @@ class VAE(nn.Module):
         Estimate the negative lower bound on the log-likelihood
         (the negative lower bound is used to have a function that should be minimized)
         """
-        x = x.repeat(self.k, 1)
+        x = x.repeat_interleave(self.k, dim=0)
         log_w = self.calc_log_w(x)
 
         return -torch.sum(log_w) / self.k
@@ -281,7 +281,7 @@ class VAE(nn.Module):
         """
         Estimate the log-likelihood, averaging over k samples for each data point
         """
-        x = x.repeat(k, 1)
+        x = x.repeat_interleave(k, dim=0)
 
         log_w = self.calc_log_w(x)
 
