@@ -190,8 +190,7 @@ def train_and_save_checkpoints(seed: int,
                               hidden_units_p=_hidden_units_p, data_type='binary', device=_device,
                               bias=_dataloader.dataset.get_train_bias())
     # Instantiate Optimizer & LR-Scheduler
-    # _optimizer = optim.Adam(params=_model.params, lr=1e-3, betas=(0.99, 0.999), eps=1e-4)
-    _optimizer = optim.SGD(params=_model.params, lr=1e-3)
+    _optimizer = optim.Adam(params=_model.params, lr=1e-3, betas=(0.99, 0.999), eps=1e-4)
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
     # Start the training loop
     train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3280,
@@ -216,10 +215,10 @@ def train_and_save_checkpoints(seed: int,
 if __name__ == '__main__':
     train_and_save_checkpoints(seed=42,
                                cuda=True,
-                               k=50,
-                               num_layers=2,
-                               dataset='binary_mnist',
+                               k=1,
+                               num_layers=1,
+                               dataset='mnist',
                                model_type='iwae',
-                               batch_size=1000,
+                               batch_size=100,
                                debug=True,
                                dtype=torch.float64)
