@@ -49,10 +49,11 @@ class IWAE(vae.VAE):
         x = x.repeat_interleave(self.k, dim=0)
         log_w = self.calc_log_w(x)
 
-        log_w_matrix = log_w.reshape(-1, self.k)
+        detached_log_w = log_w.clone().detach()
+        log_w_matrix = detached_log_w.reshape(-1, self.k)
         log_w_max_values = log_w_matrix.max(dim=1, keepdim=True).values
         w = torch.exp(log_w_matrix - log_w_max_values)
         w_normalized_matrix = w / torch.sum(w, dim=1, keepdim=True)
         w_normalized = w_normalized_matrix.reshape(log_w.shape)
 
-        return -torch.dot(w_normalized, log_w)
+        return -torch.dot(w_normalized.detach(), log_w)
