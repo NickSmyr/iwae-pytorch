@@ -1,4 +1,6 @@
 import torch
+import utils.persistence as persistence
+from tqdm.auto import tqdm
 
 from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets
@@ -18,10 +20,11 @@ from modules.validate import validate
 batch_size = 200
 # In the IWAE paper, this parameter is 8
 #epochs_exp = 8
-epochs_exp = 2
+epochs_exp = 8
 beta1 = 0.9
 beta2 = 0.999
 adam_epsilon = 1e-4
+debug = True
 
 # Set to 'AE', 'VAE' or 'IWAE'
 model_type = 'VAE'
@@ -67,28 +70,56 @@ model = model.to(device)
 
 losses = []
 
-for i in range(epochs_exp):
-    # Learning rate schedule as in the IWAE paper
-    learning_rate = 0.001 * 10.0 ** (-i / 7.0)
+total_epochs = sum([3**i for i in range(8)])
 
-    print(f"Epoch exponent {i}/{epochs_exp - 1}, learning rate: {learning_rate:.2e}\n----------------")
+n_iters = 0
+optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=0.001,
+            betas=(beta1, beta2),
+            eps=adam_epsilon
+        )
 
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=learning_rate,
-        betas=(beta1, beta2),
-        eps=adam_epsilon
-    )
+with tqdm(total=total_epochs) as pbar:
+    for i in range(epochs_exp):
+        # Learning rate schedule as in the IWAE paper
+        learning_rate = 0.001 * 10.0 ** (-i / 7.0)
 
-    num_epochs = 3 ** i
+        print(f"Epoch exponent {i}/{epochs_exp - 1}, learning rate: {learning_rate:.2e}\n----------------")
+        # Change learning rate of Adam
+        for g in optimizer.param_groups:
+            g['lr'] = learning_rate
 
-    for t in range(num_epochs):
-        print(f"Epoch exponent {i}/{epochs_exp - 1}, epoch {t + 1}/{num_epochs}\n----------------")
-        train(train_dataloader, model, optimizer, device)
-        loss = validate(test_dataloader, model, device)
-        losses.append(loss)
-        print(f"Validation average loss: {loss:>8f} \n")
+        num_epochs = 3 ** i
+        avg_val_loss = None
+        for t in range(num_epochs):
+            print(f"Epoch exponent {i}/{epochs_exp - 1}, epoch {t + 1}/{num_epochs}\n----------------")
+            train(train_dataloader, model, optimizer, device, pbar)
+            # No need to validate every epoch
+            if n_iters % 100 == 0:
+                loss = validate(test_dataloader, model, device)
+                losses.append(loss)
+                print(f"Validation average loss: {loss:>8f} \n")
 
+            pbar.update(1)
+            n_iters +=1
+            if n_iters > 2 and debug:
+                break
+        if n_iters > 2 and debug:
+            break
+
+
+# Save final checkpoint
+# TODO save K, num_layers
+persistence.save_model_optimizer_scheduler_hparams(model=model,
+                                           optimizer=optimizer,
+                                           scheduler=None,
+                                           dataset_name="mnist",
+                                           batch_size=batch_size,
+                                           model_type=model_type,
+                                           num_layers=1,
+                                           k=None,
+                                           checkpoint_path="../checkpoints")
 
 # Plot validation losses per epoch
 plt.figure()
