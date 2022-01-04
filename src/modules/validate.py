@@ -1,16 +1,17 @@
 import torch
 
 
-def validate(dataloader, model, device):
-    loss = 0
+def validate(dataloader, model, device, loss_parameters={}):
+    total_loss = 0
+    num_data_points = 0
 
     with torch.no_grad():
         for X, y in dataloader:
+            num_data_points += len(X)
             X = X.to(device)
-            objective = model.objective(X)
-            loss += objective.item()
+            loss = torch.sum(model.estimate_loss(X, **loss_parameters))
+            total_loss += loss.item()
 
-    num_batches = len(dataloader)
-    loss /= num_batches
+    total_loss /= num_data_points
 
-    return loss
+    return total_loss

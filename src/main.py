@@ -1,4 +1,6 @@
 import torch
+import utils.persistence as persistence
+from tqdm.auto import tqdm
 
 from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets
@@ -15,16 +17,28 @@ from modules.validate import validate
 
 
 # Parameters as in the IWAE paper
-batch_size = 200
+train_batch_size = 200
+
+# Larger batch size for validation
+validation_batch_size = 20000
+
+# Smaller batch size for final performance testing as k could be large
+final_validation_batch_size = 20
+
 # In the IWAE paper, this parameter is 8
 #epochs_exp = 8
-epochs_exp = 2
+epochs_exp = 8
 beta1 = 0.9
 beta2 = 0.999
 adam_epsilon = 1e-4
+debug = True
 
 # Set to 'AE', 'VAE' or 'IWAE'
-model_type = 'VAE'
+model_type = 'IWAE'
+
+# k hyper parameter
+k = 5
+
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Using {device} device")
@@ -43,8 +57,9 @@ test_data = datasets.MNIST(
     transform=Compose([ToTensor(), Lambda(lambda x: torch.bernoulli(torch.flatten(x)))])
 )
 
-train_dataloader = DataLoader(training_data, batch_size=batch_size, pin_memory=True)
-test_dataloader = DataLoader(test_data, batch_size=batch_size, pin_memory=True)
+train_dataloader = DataLoader(training_data, batch_size=train_batch_size, pin_memory=True)
+validation_dataloader = DataLoader(test_data, batch_size=validation_batch_size, pin_memory=True)
+final_validation_dataloader = DataLoader(test_data, batch_size=final_validation_batch_size, pin_memory=True)
 
 # Initialize bias of output unit based on means of training data
 mean_of_training_data = torch.stack([d for d, l in training_data]).mean(0)
@@ -56,9 +71,9 @@ if model_type == 'AE':
 elif model_type == 'VAE':
     # Single stochastic layer architecture from IWAE paper
     # Disable initialization of output bias for now
-    model = VAE(q_dim=50, hidden_dims=[200, 200], device=device)#, output_bias=output_bias)
+    model = VAE(k=k, q_dim=50, hidden_dims=[200, 200], device=device)#, output_bias=output_bias)
 elif model_type == 'IWAE':
-    model = IWAE()
+    model = IWAE(k=k, q_dim=50, hidden_dims=[200, 200], device=device)
 else:
     print(f"Unknown model type: {model_type}")
     exit(1)
@@ -67,34 +82,67 @@ model = model.to(device)
 
 losses = []
 
-for i in range(epochs_exp):
-    # Learning rate schedule as in the IWAE paper
-    learning_rate = 0.001 * 10.0 ** (-i / 7.0)
+total_epochs = sum([3**i for i in range(epochs_exp)])
 
-    print(f"Epoch exponent {i}/{epochs_exp - 1}, learning rate: {learning_rate:.2e}\n----------------")
+n_iters = 0
+optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=0.001,
+            betas=(beta1, beta2),
+            eps=adam_epsilon
+        )
 
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=learning_rate,
-        betas=(beta1, beta2),
-        eps=adam_epsilon
-    )
+with tqdm(total=total_epochs) as pbar:
+    for i in range(epochs_exp):
+        # Learning rate schedule as in the IWAE paper
+        learning_rate = 0.001 * 10.0 ** (-i / 7.0)
 
-    num_epochs = 3 ** i
+        print(f"Epoch exponent {i}/{epochs_exp - 1}, learning rate: {learning_rate:.2e}\n----------------")
+        # Change learning rate of Adam
+        for g in optimizer.param_groups:
+            g['lr'] = learning_rate
 
-    for t in range(num_epochs):
-        print(f"Epoch exponent {i}/{epochs_exp - 1}, epoch {t + 1}/{num_epochs}\n----------------")
-        train(train_dataloader, model, optimizer, device)
-        loss = validate(test_dataloader, model, device)
-        losses.append(loss)
-        print(f"Validation average loss: {loss:>8f} \n")
+        num_epochs = 3 ** i
+        avg_val_loss = None
+        for t in range(num_epochs):
+            print(f"Epoch exponent {i}/{epochs_exp - 1}, epoch {t + 1}/{num_epochs}\n----------------")
+            train(train_dataloader, model, optimizer, device) # , pbar)
+            # No need to validate every epoch
+            if n_iters % 100 == 0:
+                loss = validate(validation_dataloader, model, device)
+                losses.append(loss)
+                print(f"Validation average loss: {loss:>8f} \n")
 
+            pbar.update(1)
+            n_iters +=1
+            if n_iters > 2 and debug:
+                break
+        if n_iters > 2 and debug:
+            break
+
+
+# Save final checkpoint
+# TODO save K, num_layers
+persistence.save_model_optimizer_scheduler_hparams(model=model,
+                                           optimizer=optimizer,
+                                           scheduler=None,
+                                           dataset_name="mnist",
+                                           batch_size=train_batch_size,
+                                           model_type=model_type,
+                                           num_layers=1,
+                                           k=k,
+                                           checkpoint_path="../checkpoints")
+
+# Calculate performance
+validation_k = 5000
+loss = validate(final_validation_dataloader, model, device, {"k": validation_k})
+print(f"Validation average loss L_{validation_k}: {loss:>8f} \n")
 
 # Plot validation losses per epoch
 plt.figure()
 plt.plot(losses)
 plt.xlabel('Epoch')
-plt.ylabel('Estimate of negative lower bound on the log-likelihood')
+plt.ylabel('Estimate of the lower bound of the log-likelihood')
 
 # Visualize some results
 

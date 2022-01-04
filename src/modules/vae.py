@@ -181,6 +181,7 @@ class VAE(nn.Module):
 
     def __init__(
         self,
+        k: int = 1,
         c_in: int = 1,
         w_in_width: int = 28,
         w_in_height: int = 28,
@@ -193,6 +194,7 @@ class VAE(nn.Module):
         logger: Optional[CommandLineLogger] = None):
         """
         VAE class constructor.
+        :param (int) k: number of samples per data point
         :param (int) c_in: number of input channels
         :param (int) w_in_width: width of input
         :param (int) w_in_height: height of input
@@ -205,6 +207,7 @@ class VAE(nn.Module):
         nn.Module.__init__(self)
         self.logger = CommandLineLogger(name=self.__class__.__name__) if logger is None else logger
 
+        self.k = k
         self.device = device
 
         # Set defaults
@@ -231,12 +234,12 @@ class VAE(nn.Module):
 
     def calc_log_p(self, x, h_samples):
         """
-        Calculate p(x,h|theta)
+        Calculate log p(x,h|theta)
         """
         # Calculate prior: log p(h|theta)
         prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples), torch.ones_like(h_samples))
 
-        # Calculate p(x|h,theta)
+        # Calculate log p(x|h,theta)
         p = self.decoder.calc_log_likelihood(x, h_samples)
 
         return prior + p
@@ -244,11 +247,23 @@ class VAE(nn.Module):
 
     def calc_log_q(self, h_samples, x):
         """
-        Calculate q(h|x)
+        Calculate log q(h|x)
         """
         q = self.encoder.calc_log_likelihood(h_samples, x)
 
         return q
+
+
+    def calc_log_w(self, x):
+        """
+        Calculate log w(x,h,theta) = log p(x,h|theta) - log q(h|x)
+        """
+        h_samples = self.encoder.forward(x)
+
+        log_p = self.calc_log_p(x, h_samples)
+        log_q = self.calc_log_q(h_samples, x)
+
+        return log_p - log_q
 
 
     def objective(self, x):
@@ -256,9 +271,23 @@ class VAE(nn.Module):
         Estimate the negative lower bound on the log-likelihood
         (the negative lower bound is used to have a function that should be minimized)
         """
-        h_samples = self.encoder.forward(x)
+        x = x.repeat(self.k, 1)
+        log_w = self.calc_log_w(x)
 
-        log_p = self.calc_log_p(x, h_samples)
-        log_q = self.calc_log_q(h_samples, x)
+        return -torch.sum(log_w) / self.k
 
-        return -torch.mean(log_p - log_q)
+
+    def estimate_loss(self, x, k=1):
+        """
+        Estimate the log-likelihood, averaging over k samples for each data point
+        """
+        x = x.repeat(k, 1)
+
+        log_w = self.calc_log_w(x)
+
+        log_w = log_w.reshape(-1, k)
+
+        max_values = log_w.max(dim=1, keepdim=True).values
+        log_mean_exp = max_values + torch.log(torch.mean(torch.exp(log_w - max_values), dim=1, keepdim=True))
+
+        return log_mean_exp
