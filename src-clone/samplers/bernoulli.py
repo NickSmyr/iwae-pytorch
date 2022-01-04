@@ -17,7 +17,7 @@ class BernoulliSampler(nn.Module, DistributionSampler):
         return self.sample(x)
 
     def get_mean(self, x: torch.Tensor):
-        return self.mean_network(x.float())
+        return self.mean_network(x)
 
     def sample(self, shape_or_x: tuple or torch.Tensor) -> torch.Tensor:
         assert type(shape_or_x) == torch.Tensor

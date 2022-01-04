@@ -8,6 +8,7 @@ import numpy as np
 import torch.random
 import wget
 
+# noinspection PyPep8Naming
 import dataloaders.ConvertData as converters
 from utils.data import get_checksum
 

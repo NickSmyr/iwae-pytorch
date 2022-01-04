@@ -1,10 +1,13 @@
 import os
+from typing import Optional, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 # noinspection PyProtectedMember
 from torch.utils.data import DataLoader, Dataset
+from torchvision.datasets import FashionMNIST as FashionMnistDataset
+from torchvision.transforms import ToTensor, transforms
 
 from ifaces import DownloadableDataset
 from utils.data import unzip_gz
@@ -89,6 +92,32 @@ class BinaryMnistDataloader(DataLoader):
     def __init__(self, train_not_test: bool = True, **kwargs):
         self.dataset = None  # type: BinaryMnistDataset
         DataLoader.__init__(self, dataset=BinaryMnistDataset(train_not_test=train_not_test), **kwargs)
+
+
+class FashionMnistDataloader(DataLoader):
+    DTransforms = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(0.5, 0.5),
+        transforms.Lambda(lambda x: torch.flatten(x)),
+    ])
+
+    def __init__(self, train_not_test: bool = True, transform: Optional[Callable] = None, **kwargs):
+        # Add method to compute the mean image
+        def get_train_bias_np(_self) -> np.ndarray:
+            data_mean = np.mean(_self.data.numpy(), axis=0)[None, :]
+            return -np.log(1. / np.clip(data_mean, 0.001, 0.999) - 1.)
+
+        def get_train_bias(_self) -> torch.Tensor:
+            return torch.from_numpy(_self.get_train_bias_np().flatten())
+
+        setattr(FashionMnistDataset, 'get_train_bias_np', get_train_bias_np)
+        setattr(FashionMnistDataset, 'get_train_bias', get_train_bias)
+        # Instantiate dataset
+        self.dataset = FashionMnistDataset(root=DownloadableDataset.DATA_DIR, train=train_not_test, download=True,
+                                           transform=transform if transform is not None else self.__class__.DTransforms)
+        self.dataset.title = 'fashion_mnist'
+        # Instantiate dataloader
+        DataLoader.__init__(self, dataset=self.dataset, **kwargs)
 
 
 if __name__ == '__main__':
