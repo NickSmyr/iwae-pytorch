@@ -8,10 +8,11 @@ import scipy.io
 import torch
 
 
-def binarize_batch(x : List):
+def binarize_batch(x: List):
     xb = torch.vstack(x)
     xb = torch.bernoulli(xb)
     return xb
+
 
 def convert_MNIST(dir, plot_samples=False):
     def load(full_path):

@@ -7,17 +7,11 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import transforms
 
+from dataloaders.mnist import MnistDataset
 from ifaces import DownloadableDataset
 
-from dataloaders.ConvertData import binarize_batch
 
 class OmniglotDataset(Dataset, DownloadableDataset):
-    DTransforms = transforms.Compose([
-        transforms.ToTensor(),
-        #transforms.Lambda(lambda x: torch.bernoulli(x)),
-        transforms.Lambda(lambda x: torch.flatten(x)),
-    ])
-
     def __init__(self, train_not_test: bool = True):
         DownloadableDataset.__init__(self, which='omniglot')
         if train_not_test:
@@ -28,7 +22,7 @@ class OmniglotDataset(Dataset, DownloadableDataset):
         Dataset.__init__(self)
 
     def __getitem__(self, index) -> torch.Tensor:
-        return torch.from_numpy(self.data[index].flatten())
+        return MnistDataset.DTransforms(self.data[index])
 
     def __len__(self) -> int:
         return len(self.data)

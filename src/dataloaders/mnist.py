@@ -11,12 +11,11 @@ from torchvision.transforms import transforms
 from ifaces import DownloadableDataset
 from utils.data import unzip_gz
 
-from dataloaders.ConvertData import binarize_batch
 
 class MnistDataset(Dataset, DownloadableDataset):
     DTransforms = transforms.Compose([
         transforms.ToTensor(),
-        #transforms.Lambda(lambda x: torch.bernoulli(x)),
+        transforms.Lambda(lambda x: torch.bernoulli(x)),
         transforms.Lambda(lambda x: torch.flatten(x)),
     ])
 

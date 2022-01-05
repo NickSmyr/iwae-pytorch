@@ -68,7 +68,7 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
             if isinstance(model, IWAEClone):
                 L_k_q = model(torch.bernoulli(x.type(torch.get_default_dtype()).to(device)), k=k, model_type=model_type)
             else:
-                L_k_q = model.objective(x.type(torch.get_default_dtype()).to(device))
+                L_k_q = model.objective(torch.bernoulli(x.type(torch.get_default_dtype()).to(device)))
             ls.append(-L_k_q.item())
             pbar.set_description(f'[e|{e:03d}/{n_epochs:03d}][l|{np.mean(ls):.03f}][L1|{L1:.03f}] ')
             assert not np.isnan(np.mean(ls))
