@@ -1,5 +1,4 @@
 import importlib
-import math
 import os
 import time
 
@@ -69,7 +68,7 @@ def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int
         # Update LR
         scheduler.step()
         # Save model checkpoint
-        if e > 0 and int(math.log(e, 3)) == math.log(e, 3):
+        if e > 0 and e % 100 == 0:
             state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
             torch.save({
                 'model': model.state_dict(),
@@ -156,7 +155,6 @@ def train_and_save_checkpoints(seed: int,
         assert torch.cuda.is_available(), "No CUDA CPU available."
     # Initialize training
     DistributionSampler.set_seed(seed=seed)
-    DownloadableDataset.set_data_directory('../data')
     if dtype == torch.float64:
         torch.set_default_dtype(torch.float64)
     _device = torch.device('cuda') if cuda else torch.device('cpu')
@@ -213,12 +211,13 @@ def train_and_save_checkpoints(seed: int,
 
 
 if __name__ == '__main__':
+    DownloadableDataset.set_data_directory('../data')
     train_and_save_checkpoints(seed=42,
                                cuda=True,
-                               k=1,
-                               num_layers=1,
+                               k=50,
+                               num_layers=2,
                                dataset='mnist',
                                model_type='iwae',
-                               batch_size=100,
-                               debug=True,
+                               batch_size=1000,
+                               debug=False,
                                dtype=torch.float64)

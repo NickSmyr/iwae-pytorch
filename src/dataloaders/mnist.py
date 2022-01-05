@@ -1,5 +1,4 @@
 import os
-from typing import Optional, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,13 +6,19 @@ import torch
 # noinspection PyProtectedMember
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import FashionMNIST as FashionMnistDataset
-from torchvision.transforms import ToTensor, transforms
+from torchvision.transforms import transforms
 
 from ifaces import DownloadableDataset
 from utils.data import unzip_gz
 
 
 class MnistDataset(Dataset, DownloadableDataset):
+    DTransforms = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Lambda(lambda x: torch.bernoulli(x)),
+        transforms.Lambda(lambda x: torch.flatten(x)),
+    ])
+
     def __init__(self, train_not_test: bool = True):
         DownloadableDataset.__init__(self, which='mnist')
         if train_not_test:
@@ -24,7 +29,7 @@ class MnistDataset(Dataset, DownloadableDataset):
         Dataset.__init__(self)
 
     def __getitem__(self, index) -> torch.Tensor:
-        return torch.from_numpy(self.data[index].flatten())
+        return MnistDataset.DTransforms(self.data[index])
 
     def __len__(self) -> int:
         return len(self.data)
@@ -50,6 +55,11 @@ class MnistDataset(Dataset, DownloadableDataset):
 
 
 class BinaryMnistDataset(Dataset, DownloadableDataset):
+    DTransforms = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Lambda(lambda x: torch.flatten(x)),
+    ])
+
     def __init__(self, train_not_test: bool = True):
         DownloadableDataset.__init__(self, which='binary_mnist')
         if train_not_test:
@@ -60,7 +70,7 @@ class BinaryMnistDataset(Dataset, DownloadableDataset):
         Dataset.__init__(self)
 
     def __getitem__(self, index) -> torch.Tensor:
-        return torch.from_numpy(self.data[index].flatten())
+        return BinaryMnistDataset.DTransforms(self.data[index])
 
     def __len__(self) -> int:
         return len(self.data)
@@ -95,13 +105,7 @@ class BinaryMnistDataloader(DataLoader):
 
 
 class FashionMnistDataloader(DataLoader):
-    DTransforms = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(0.5, 0.5),
-        transforms.Lambda(lambda x: torch.flatten(x)),
-    ])
-
-    def __init__(self, train_not_test: bool = True, transform: Optional[Callable] = None, **kwargs):
+    def __init__(self, train_not_test: bool = True, **kwargs):
         # Add method to compute the mean image
         def get_train_bias_np(_self) -> np.ndarray:
             data_mean = np.mean(_self.data.numpy(), axis=0)[None, :]
@@ -114,25 +118,25 @@ class FashionMnistDataloader(DataLoader):
         setattr(FashionMnistDataset, 'get_train_bias', get_train_bias)
         # Instantiate dataset
         self.dataset = FashionMnistDataset(root=DownloadableDataset.DATA_DIR, train=train_not_test, download=True,
-                                           transform=transform if transform is not None else self.__class__.DTransforms)
+                                           transform=MnistDataset.DTransforms)
         self.dataset.title = 'fashion_mnist'
         # Instantiate dataloader
         DataLoader.__init__(self, dataset=self.dataset, **kwargs)
 
 
 if __name__ == '__main__':
-    DownloadableDataset.set_data_directory('/home/achariso/PycharmProjects/kth-ml-course-projects/iwae-pytorch/data')
+    DownloadableDataset.set_data_directory('../../data')
 
     # MNIST
-    _dl = MnistDataloader(train_not_test=True, batch_size=10, pin_memory=False)
-    _first_batch = next(iter(_dl))
+    _dl = FashionMnistDataloader(train_not_test=True, batch_size=10, pin_memory=False, shuffle=False)
+    _first_batch = next(iter(_dl))[0]
     print(_first_batch.shape)
-    plt.imshow(1 - _first_batch[5], cmap='gray')
+    plt.imshow(1 - _first_batch[5].reshape(28, 28), cmap='gray')
     plt.show()
 
     # Binary MNIST
     _dl = BinaryMnistDataloader(train_not_test=True, batch_size=10, pin_memory=False)
     _first_batch = next(iter(_dl))
     print(_first_batch.shape)
-    plt.imshow(1 - _first_batch[0], cmap='gray')
+    plt.imshow(1 - _first_batch[0].reshape(28, 28), cmap='gray')
     plt.show()

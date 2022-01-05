@@ -1,5 +1,7 @@
 import torch
 from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from samplers.bernoulli import BernoulliSampler
 from samplers.gaussian import GaussianSampler, UnitGaussianSampler
@@ -92,7 +94,6 @@ class IWAEClone(nn.Module):
         for units_prev, units_next, hidden_units in zip(latent_units, latent_units[1:], hidden_units_q):
             layers_q.append(
                 GaussianSampler.random([units_prev] + hidden_units + [units_next])
-                    .to(device)
             )
 
         layers_p = []
@@ -100,21 +101,18 @@ class IWAEClone(nn.Module):
                 zip(list(reversed(latent_units))[:-1], list(reversed(latent_units))[1:-1], hidden_units_p[:-1]):
             layers_p.append(
                 GaussianSampler.random([units_prev] + hidden_units + [units_next])
-                    .to(device)
             )
         if data_type == 'binary':
             layers_p.append(
                 BernoulliSampler.random([latent_units[1]] + hidden_units_p[-1] + [latent_units[0]], bias=bias)
-                    .to(device)
             )
         elif data_type == 'continuous':
             layers_p.append(
                 GaussianSampler.random([latent_units[1]] + hidden_units_p[-1] + [latent_units[0]], mean=bias)
-                    .to(device)
             )
 
         prior = UnitGaussianSampler(device=device)
-        return IWAEClone(layers_q, layers_p, prior, device=device)
+        return IWAEClone(layers_q, layers_p, prior, device=device).to(device)
 
     # ----------------------------------------------------------------
     #  Functions for reproducing paper results - visualizations
@@ -134,31 +132,17 @@ class IWAEClone(nn.Module):
     def get_last_p_layer_weights(self):
         return reshape_and_tile_images(self.last_p_layer_weights_np().T)
 
-    def measure_marginal_log_likelihood(self, dataset, subdataset, minibatch_size=15, num_samples=50):
-        print("Measuring {} log likelihood".format(subdataset))
-        test_x = dataset.data[subdataset]
-        n_examples = test_x.get_value(borrow=True).shape[0]
-
-        if n_examples % minibatch_size == 0:
-            num_minibatches = n_examples // minibatch_size
-        else:
-            num_minibatches = n_examples // minibatch_size + 1
-
-        index = T.lscalar('i')
-        minibatch = dataset.minibatchIindex_minibatch_size(index, minibatch_size, subdataset=subdataset)
-
-        log_marginal_likelihood_estimate = self.log_marginal_likelihood_estimate(minibatch, num_samples)
-
-        get_log_marginal_likelihood = theano.function([index], T.sum(log_marginal_likelihood_estimate))
-
-        pbar = progressbar.ProgressBar(maxval=num_minibatches).start()
-        sum_of_log_likelihoods = 0.
-        for i in xrange(num_minibatches):
-            summand = get_log_marginal_likelihood(i)
-            sum_of_log_likelihoods += summand
-            pbar.update(i)
-        pbar.finish()
-
-        marginal_log_likelihood = sum_of_log_likelihoods / n_examples
-
-        return marginal_log_likelihood
+    def measure_marginal_log_likelihood(self, dataloader: DataLoader, k: int = 50, dataset_type: str = 'test'):
+        self.eval()
+        s = torch.tensor(0.0).to(self.device)
+        i, N = 1., 0
+        pbar = tqdm(dataloader)
+        for x in pbar:
+            if type(x) == list:
+                x = x[0].squeeze()
+            N += x.shape[0]
+            s += self.log_marginal_likelihood_estimate(x.type(torch.get_default_dtype()).to(self.device), k=k)
+            pbar.set_description(f'[mean(s)|{s.cpu().numpy() / i:.03f}] ')
+            i += 1.
+        self.train()
+        return s / N
