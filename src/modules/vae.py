@@ -62,7 +62,7 @@ class GaussianStochasticLayer(nn.Module):
 
         # Hidden network
         self.hidden_network = nn.Sequential(*chain.from_iterable(
-            [nn.Linear(h_in, h_out, bias=use_bias), nn.Tanh()]
+            [nn.Linear(h_in, h_out, bias=use_bias), nn.Tanh(), nn.Linear(h_out, h_out, bias=use_bias), nn.Tanh()]
             for h_in, h_out in zip([input_dim] + hidden_dims[:-1], hidden_dims[1:])
         ))
 
@@ -127,7 +127,7 @@ class BernoulliStochasticLayer(nn.Module):
 
         # Hidden network
         self.hidden_network = nn.Sequential(*chain.from_iterable(
-            [nn.Linear(h_in, h_out, bias=use_bias), nn.Tanh()]
+            [nn.Linear(h_in, h_out, bias=use_bias), nn.Tanh(), nn.Linear(h_out, h_out, bias=use_bias), nn.Tanh()]
             for h_in, h_out in zip([input_dim] + hidden_dims[:-1], hidden_dims[1:])
         ))
 
