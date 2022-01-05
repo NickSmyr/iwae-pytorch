@@ -21,7 +21,6 @@ class IWAE(vae.VAE):
         w_in_height: int = 28,
         q_dim: int = 64,
         p_dim: Optional[int] = None,
-        device = "cpu",
         use_bias: bool = True,
         output_bias = None,
         hidden_dims: Optional[List[int]] = None,
@@ -38,7 +37,7 @@ class IWAE(vae.VAE):
         :param (optional) hidden_dims: number of neurons in encoder's hidden layers (and decoder's respective ones)
         :param (optional) logger: CommandLineLogger instance to be used when verbose is enabled
         """
-        vae.VAE.__init__(self, k, c_in, w_in_width, w_in_height, q_dim, p_dim, device, use_bias, output_bias, hidden_dims, logger)
+        vae.VAE.__init__(self, k, c_in, w_in_width, w_in_height, q_dim, p_dim, use_bias, output_bias, hidden_dims, logger)
 
 
     def objective(self, x):
