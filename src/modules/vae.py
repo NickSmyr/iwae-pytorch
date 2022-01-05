@@ -2,11 +2,13 @@ from itertools import chain
 from typing import Optional
 import math
 
+import numpy as np
 import torch
 from torch import nn
 
 from samplers.gaussian import Exponential
 from utils.logging import CommandLineLogger
+from utils_clone.pytorch import reshape_and_tile_images
 
 half_log2pi = 1.0 / 2.0 * math.log(2.0 * math.pi)
 
@@ -90,6 +92,10 @@ class GaussianStochasticLayer(nn.Module):
 
         return p
 
+    def first_linear_layer_weights_np(self) -> np.ndarray:
+        assert type(self.hidden_network[0]) == nn.Linear
+        return self.hidden_network[0].weight.data.clone().detach().cpu().numpy().T
+
 
 class BernoulliStochasticLayer(nn.Module):
     """
@@ -146,6 +152,9 @@ class BernoulliStochasticLayer(nn.Module):
         p = calc_log_likelihood_of_samples_bernoulli(x, mean)
 
         return p
+
+    def first_linear_layer_weights_np(self):
+        return self.mean_network[0].weight.data.clone().detach().cpu().numpy().T
 
 
 class VAE(nn.Module):
@@ -308,3 +317,14 @@ class VAE(nn.Module):
         log_mean_exp = max_values + torch.log(torch.mean(torch.exp(log_w - max_values), dim=1, keepdim=True))
 
         return log_mean_exp
+
+    def first_p_layer_weights_np(self):
+        return self.decoder_layers[0].first_linear_layer_weights_np()
+
+    def get_samples(self, num_samples, device='cpu'):
+        prior_samples = torch.randn((num_samples, self.first_p_layer_weights_np().shape[0])).to(device)
+        samples = [prior_samples]
+        for layer in self.decoder_layers[:-1]:
+            samples.append(layer(samples[-1]))
+        samples_function = self.decoder_layers[-1].calc_mean(samples[-1])
+        return reshape_and_tile_images(samples_function.detach().cpu().numpy())

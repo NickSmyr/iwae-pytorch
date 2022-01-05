@@ -10,12 +10,11 @@ from utils_clone.pytorch import reshape_and_tile_images
 
 
 class IWAEClone(nn.Module):
-    def __init__(self, q_layers, p_layers, prior, device: str = 'cpu'):
+    def __init__(self, q_layers, p_layers, prior):
         nn.Module.__init__(self)
         self.q_layers = nn.ModuleList(q_layers)
         self.p_layers = nn.ModuleList(p_layers)
         self.prior = prior
-        self.device = device
 
     @property
     def params(self):
@@ -65,6 +64,9 @@ class IWAEClone(nn.Module):
             L_q = - torch.dot(ws_normalized_vector.detach(), log_ws)
         return L_q
 
+    def estimate_loss(self, x, k):
+        return self.log_marginal_likelihood_estimate(x, k)
+
     def log_marginal_likelihood_estimate(self, x, k):
         rep_x = x.repeat_interleave(k, dim=0)
         q_samples = self.q_samples(rep_x)
@@ -90,7 +92,7 @@ class IWAEClone(nn.Module):
         return self.p_layers[0].first_linear_layer_weights_np()
 
     @staticmethod
-    def random(latent_units, hidden_units_q, hidden_units_p, bias=None, data_type='binary', device='cpu'):
+    def random(latent_units, hidden_units_q, hidden_units_p, bias=None, data_type='binary'):
         layers_q = []
         for units_prev, units_next, hidden_units in zip(latent_units, latent_units[1:], hidden_units_q):
             layers_q.append(
@@ -112,15 +114,15 @@ class IWAEClone(nn.Module):
                 GaussianSampler.random([latent_units[1]] + hidden_units_p[-1] + [latent_units[0]], mean=bias)
             )
 
-        prior = UnitGaussianSampler(device=device)
-        return IWAEClone(layers_q, layers_p, prior, device=device).to(device)
+        prior = UnitGaussianSampler()
+        return IWAEClone(layers_q, layers_p, prior)
 
     # ----------------------------------------------------------------
     #  Functions for reproducing paper results - visualizations
     # ----------------------------------------------------------------
 
-    def get_samples(self, num_samples):
-        prior_samples = self.prior.sample((num_samples, self.first_p_layer_weights_np().shape[0]))
+    def get_samples(self, num_samples, device='cpu'):
+        prior_samples = torch.randn(num_samples, self.first_p_layer_weights_np().shape[0], device=device)
         samples = [prior_samples]
         for layer in self.p_layers[:-1]:
             samples.append(layer.sample(samples[-1]))
@@ -133,7 +135,7 @@ class IWAEClone(nn.Module):
     def get_last_p_layer_weights(self):
         return reshape_and_tile_images(self.last_p_layer_weights_np().T)
 
-    def measure_marginal_log_likelihood(self, dataloader: DataLoader, k: int = 50, dataset_type: str = 'test'):
+    def measure_marginal_log_likelihood(self, dataloader: DataLoader, k: int = 50, device='cpu'):
         s = []
         N = 0
         pbar = tqdm(dataloader)
@@ -143,7 +145,7 @@ class IWAEClone(nn.Module):
                     x = x[0].squeeze()
                 N += x.shape[0]
                 s.append(
-                    self.log_marginal_likelihood_estimate(x.type(torch.get_default_dtype()).to(self.device), k=k)
+                    self.log_marginal_likelihood_estimate(x.type(torch.get_default_dtype()).to(device), k=k)
                         .detach().cpu().numpy()
                 )
                 pbar.set_description(f'[mean(s)|{np.mean(s):.03f}] ')

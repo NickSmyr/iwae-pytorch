@@ -1,5 +1,4 @@
 import importlib
-import math
 import os
 import time
 
@@ -36,10 +35,10 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
         os.mkdir(chkpts_dir_path)
     state_fname_s = state_name + '_e__EPOCH__.pkl'
     start_epoch = 0
-    for i in range(0, 8):
-        e = 3 ** i
+    for i in range(0, 33):
+        e = 100 * i
         state_fpath_e = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
-        state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{3 ** (i + 1):03d}'))
+        state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{100 * (i + 1):03d}'))
         if not os.path.exists(state_fpath) and os.path.exists(state_fpath_e):
             state_dict = torch.load(state_fpath_e, map_location=device)
             model.load_state_dict(state_dict['model'])
@@ -54,11 +53,11 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
                                                                 optimizer.param_groups[0]['lr']))
     time.sleep(0.1)
 
-    print(model)
-
     # Main training loop
+    L1 = 0.0
     for e in range(start_epoch, n_epochs):
         ls = []
+        x = None
         pbar = tqdm(dataloader)
         for x in pbar:
             # Zero out discriminator gradient (before backprop)
@@ -71,16 +70,20 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
             else:
                 L_k_q = model.objective(x.type(torch.get_default_dtype()).to(device))
             ls.append(-L_k_q.item())
-            pbar.set_description(f'[e|{e:03d}/{n_epochs:03d}][l|{np.mean(ls):.03f}] ')
+            pbar.set_description(f'[e|{e:03d}/{n_epochs:03d}][l|{np.mean(ls):.03f}][L1|{L1:.03f}] ')
             assert not np.isnan(np.mean(ls))
             # Perform backward pass (i.e. backprop)
             L_k_q.backward()
             # Update weights
             optimizer.step()
+
+        with torch.no_grad():
+            L1 = model.estimate_loss(x=x.clone().type(torch.get_default_dtype()).to(device), k=1).mean().item()
+
         # Update LR
         scheduler.step()
         # Save model checkpoint
-        if e > 0 and e % 100 == 0:
+        if e % 100 == 0:
             state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
             torch.save({
                 'model': model.state_dict(),
@@ -92,8 +95,9 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
             print('')
             time.sleep(0.1)
         # After each epoch preview some samples
-        if e % 30 == 0 and isinstance(model, IWAEClone):
-            samples = model.get_samples(100)
+        if e % 30 == 0:
+            with torch.no_grad():
+                samples = model.get_samples(100, device=device)
             plt.imshow(samples, cmap='Greys')
             plt.axis('off')
             plt.title(f'[{model_type.upper()}] 100 samples after epoch={e:03d}')
@@ -202,16 +206,17 @@ def train_and_save_checkpoints(seed: int,
 
     # Instantiate model's Module
     if use_clone:
-        _model = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                                  hidden_units_p=_hidden_units_p, device=_device,
-                                  bias=_dataloader.dataset.get_train_bias())
+        _model: IWAEClone = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
+                                             hidden_units_p=_hidden_units_p, bias=_dataloader.dataset.get_train_bias())
+        _model.prior.device = _device
     else:
         if model_type == 'vae':
             _model = VAE(k=k, latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                         hidden_units_p=_hidden_units_p, output_bias=_dataloader.dataset.get_train_bias()).to(_device)
-        elif model_type == 'iwae':
+                         hidden_units_p=_hidden_units_p, output_bias=_dataloader.dataset.get_train_bias())
+        else:  # model_type == 'iwae':
             _model = IWAE(k=k, latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                          hidden_units_p=_hidden_units_p, output_bias=_dataloader.dataset.get_train_bias()).to(_device)
+                          hidden_units_p=_hidden_units_p, output_bias=_dataloader.dataset.get_train_bias())
+    _model = _model.to(_device)
 
     # Instantiate Optimizer & LR-Scheduler
     _optimizer = optim.Adam(params=_model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-4)
@@ -245,13 +250,13 @@ def train_and_save_checkpoints(seed: int,
 if __name__ == '__main__':
     DownloadableDataset.set_data_directory('../data')
     train_and_save_checkpoints(seed=42,
-                               cuda=False,
+                               cuda=True,
                                k=1,
                                num_layers=2,
                                dataset='mnist',
-                               model_type='vae',
+                               model_type='iwae',
                                use_clone=False,
-                               batch_size=100,
+                               batch_size=1000,
                                debug=False,
                                dtype=torch.float32,
                                chkpts_dir_path='../checkpoints')
