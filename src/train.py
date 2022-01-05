@@ -65,7 +65,7 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
             if type(x) == list:
                 x = x[0].squeeze()
             if isinstance(model, IWAEClone):
-                L_k_q = model(x.type(torch.get_default_dtype()).to(device), k=k, model_type=model_type)
+                L_k_q = model(torch.bernoulli(x.type(torch.get_default_dtype()).to(device)), k=k, model_type=model_type)
             else:
                 L_k_q = model.objective(x.type(torch.get_default_dtype()).to(device))
             ls.append(-L_k_q.item())
@@ -249,5 +249,5 @@ if __name__ == '__main__':
                                use_clone=True,
                                batch_size=100,
                                debug=False,
-                               dtype=torch.float64,
+                               dtype=torch.float32,
                                chkpts_dir_path='../checkpoints')
