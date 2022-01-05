@@ -1,13 +1,5 @@
-ipykernel
-ipython
-ipython-genutils
 matplotlib
 matplotlib-inline
-nbclassic
-nbclient
-nbconvert
-nbformat
-notebook
 numpy
 pandas
 Pillow
