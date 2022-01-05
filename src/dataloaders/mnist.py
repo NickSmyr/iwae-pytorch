@@ -15,7 +15,7 @@ from utils.data import unzip_gz
 class MnistDataset(Dataset, DownloadableDataset):
     DTransforms = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Lambda(lambda x: torch.bernoulli(x)),
+        # transforms.Lambda(lambda x: torch.bernoulli(x)),
         transforms.Lambda(lambda x: torch.flatten(x)),
     ])
 
@@ -29,7 +29,7 @@ class MnistDataset(Dataset, DownloadableDataset):
         Dataset.__init__(self)
 
     def __getitem__(self, index) -> torch.Tensor:
-        return torch.from_numpy(self.data[index].flatten())
+        return MnistDataset.DTransforms(self.data[index])
 
     def __len__(self) -> int:
         return len(self.data)
