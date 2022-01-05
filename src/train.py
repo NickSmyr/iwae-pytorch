@@ -247,12 +247,7 @@ def train_and_save_checkpoints(seed: int,
     calculate_and_display_L5000(_test_dataloader, _model, _device)
 
     # Save the final checkpoint
-    _chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
-    if not os.path.exists(_chkpts_dir_path):
-        os.mkdir(_chkpts_dir_path)
-    _state_fname_s = f'{_train_dataloader.dataset.title}_k{_k:02d}_L{num_layers}' \
-                     f'_bs{batch_size}_{model_type}_final.pkl'
-    _state_fpath = os.path.join(_chkpts_dir_path, _state_fname_s)
+    _state_fpath = os.path.join(chkpts_dir_path, state_name + '_final.pkl')
     torch.save({
         'model': _model.state_dict(),
         'optimizer': _optimizer.state_dict(),
