@@ -193,6 +193,7 @@ class VAE(nn.Module):
         if hidden_units_q is None:
             hidden_units_q = [[200, 200]]
 
+        self.embedding_dim = latent_units[-1]
         # Encoder Network
         layers_q = []
         for units_prev, units_next, hidden_units in zip(latent_units, latent_units[1:], hidden_units_q):
@@ -322,7 +323,7 @@ class VAE(nn.Module):
         return self.decoder_layers[0].first_linear_layer_weights_np()
 
     def get_samples(self, num_samples, device='cpu'):
-        prior_samples = torch.randn((num_samples, self.first_p_layer_weights_np().shape[0])).to(device)
+        prior_samples = torch.randn((num_samples, self.embedding_dim)).to(device)
         samples = [prior_samples]
         for layer in self.decoder_layers[:-1]:
             samples.append(layer(samples[-1]))
