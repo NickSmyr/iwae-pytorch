@@ -20,10 +20,17 @@ from ifaces import DistributionSampler, DownloadableDataset
 from iwae_clone import IWAEClone
 from modules.vae import VAE
 from modules.iwae import IWAE
+import modules.validate
 
 
 def get_state_name(dataset_title, model_type, use_clone, k, num_layers, batch_size):
     return f'{dataset_title}_{model_type}{"-clone" if use_clone else ""}_k{k:02d}_L{num_layers}_bs{batch_size}'
+
+
+def calculate_and_display_L5000(test_dataloader, model, device):
+    validation_k = 5000
+    loss = modules.validate.validate(test_dataloader, model, device, {"k": validation_k})
+    print(f"Validation average loss L_{validation_k}: {loss:>8f} \n")
 
 
 def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler: LambdaLR, n_epochs: int,
@@ -101,7 +108,9 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
             plt.imshow(samples, cmap='Greys')
             plt.axis('off')
             plt.title(f'[{model_type.upper()}] 100 samples after epoch={e:03d}')
-            plt.show()
+            plt.draw()
+            plt.show(block=False)
+            plt.pause(0.001)
 
         if debug:
             break
@@ -200,22 +209,27 @@ def train_and_save_checkpoints(seed: int,
     try:
         _module = importlib.import_module('dataloaders.' + dataset.split('_')[-1])
         _dataloader_class = getattr(_module, dataloader_class_name)
-        _dataloader = _dataloader_class(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+        _train_dataloader = _dataloader_class(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+
+        # Smaller batch size for final performance testing as k could be large
+        final_validation_batch_size = 20
+
+        _test_dataloader = _dataloader_class(train_not_test=False, batch_size=final_validation_batch_size, pin_memory=True, shuffle=True)
     except AttributeError:
         raise Exception(f'Unknown dataset name {dataset}')
 
     # Instantiate model's Module
     if use_clone:
         _model: IWAEClone = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                                             hidden_units_p=_hidden_units_p, bias=_dataloader.dataset.get_train_bias())
+                                             hidden_units_p=_hidden_units_p, bias=_train_dataloader.dataset.get_train_bias())
         _model.prior.device = _device
     else:
         if model_type == 'vae':
             _model = VAE(k=k, latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                         hidden_units_p=_hidden_units_p, output_bias=_dataloader.dataset.get_train_bias())
+                         hidden_units_p=_hidden_units_p, output_bias=_train_dataloader.dataset.get_train_bias())
         else:  # model_type == 'iwae':
             _model = IWAE(k=k, latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                          hidden_units_p=_hidden_units_p, output_bias=_dataloader.dataset.get_train_bias())
+                          hidden_units_p=_hidden_units_p, output_bias=_train_dataloader.dataset.get_train_bias())
     _model = _model.to(_device)
 
     # Instantiate Optimizer & LR-Scheduler
@@ -223,18 +237,20 @@ def train_and_save_checkpoints(seed: int,
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
 
     # Construct general name for checkpoint files
-    state_name = get_state_name(_dataloader.dataset.title, model_type, use_clone, k, num_layers, batch_size)
+    state_name = get_state_name(_train_dataloader.dataset.title, model_type, use_clone, k, num_layers, batch_size)
 
     # Start the training loop
-    train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3280,
+    train(model=_model, dataloader=_train_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3280,
           model_type=model_type, state_name=state_name, debug=_debug, device=_device, chkpts_dir_path=chkpts_dir_path)
     print('[DONE]')
+
+    calculate_and_display_L5000(_test_dataloader, _model, _device)
 
     # Save the final checkpoint
     _chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
     if not os.path.exists(_chkpts_dir_path):
         os.mkdir(_chkpts_dir_path)
-    _state_fname_s = f'{_dataloader.dataset.title}_k{_k:02d}_L{len(_model.p_layers)}' \
+    _state_fname_s = f'{_train_dataloader.dataset.title}_k{_k:02d}_L{num_layers}' \
                      f'_bs{batch_size}_{model_type}_final.pkl'
     _state_fpath = os.path.join(_chkpts_dir_path, _state_fname_s)
     torch.save({
@@ -252,11 +268,11 @@ if __name__ == '__main__':
     train_and_save_checkpoints(seed=42,
                                cuda=True,
                                k=1,
-                               num_layers=2,
+                               num_layers=1,
                                dataset='mnist',
-                               model_type='iwae',
+                               model_type='vae',
                                use_clone=False,
-                               batch_size=1000,
+                               batch_size=400,
                                debug=False,
                                dtype=torch.float32,
                                chkpts_dir_path='../checkpoints')
