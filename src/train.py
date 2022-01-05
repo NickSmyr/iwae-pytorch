@@ -41,19 +41,28 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
     if not os.path.exists(chkpts_dir_path) or not os.path.isdir(chkpts_dir_path):
         os.mkdir(chkpts_dir_path)
     state_fname_s = state_name + '_e__EPOCH__.pkl'
-    start_epoch = 0
-    for i in range(0, 33):
-        e = 100 * i
-        state_fpath_e = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
-        state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{100 * (i + 1):03d}'))
-        if not os.path.exists(state_fpath) and os.path.exists(state_fpath_e):
-            state_dict = torch.load(state_fpath_e, map_location=device)
-            model.load_state_dict(state_dict['model'])
-            optimizer.load_state_dict(state_dict['optimizer'])
-            scheduler.load_state_dict(state_dict['scheduler'])
-            print(f'[CHECKPOINT] Loaded checkpoint after epoch {e}.')
-            start_epoch = e + 1
-            break
+    final_state_fname_s = os.path.join(chkpts_dir_path, state_fname_s.replace('e__EPOCH__', 'final'))
+    if os.path.exists(final_state_fname_s):
+        state_dict = torch.load(final_state_fname_s, map_location=device)
+        model.load_state_dict(state_dict['model'])
+        optimizer.load_state_dict(state_dict['optimizer'])
+        scheduler.load_state_dict(state_dict['scheduler'])
+        print(f'[CHECKPOINT] Loaded checkpoint FINAL checkpoint.')
+        start_epoch = n_epochs
+    else:
+        start_epoch = 0
+        for i in range(0, 33):
+            e = 100 * i
+            state_fpath_e = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
+            state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{100 * (i + 1):03d}'))
+            if not os.path.exists(state_fpath) and os.path.exists(state_fpath_e):
+                state_dict = torch.load(state_fpath_e, map_location=device)
+                model.load_state_dict(state_dict['model'])
+                optimizer.load_state_dict(state_dict['optimizer'])
+                scheduler.load_state_dict(state_dict['scheduler'])
+                print(f'[CHECKPOINT] Loaded checkpoint after epoch {e}.')
+                start_epoch = e + 1
+                break
 
     # Print welcome message
     print("Training for {} epochs with {} learning rate".format(n_epochs - start_epoch,
@@ -142,7 +151,7 @@ def update_lr(epoch: int, debug: bool = True) -> float:
         print(f'Adjusting learning rate to {new_lr}')
         print('')
         time.sleep(0.1)
-    return new_lr / old_lr
+    return new_lr / 1e-3
 
 
 def plot_lr():
@@ -209,19 +218,21 @@ def train_and_save_checkpoints(seed: int,
     try:
         _module = importlib.import_module('dataloaders.' + dataset.split('_')[-1])
         _dataloader_class = getattr(_module, dataloader_class_name)
-        _train_dataloader = _dataloader_class(train_not_test=True, batch_size=_batch_size, pin_memory=True, shuffle=True)
+        _train_dataloader = _dataloader_class(train_not_test=True, batch_size=_batch_size, pin_memory=True,
+                                              shuffle=True)
 
         # Smaller batch size for final performance testing as k could be large
         final_validation_batch_size = 20
-
-        _test_dataloader = _dataloader_class(train_not_test=False, batch_size=final_validation_batch_size, pin_memory=True, shuffle=True)
+        _test_dataloader = _dataloader_class(train_not_test=False, batch_size=final_validation_batch_size,
+                                             pin_memory=True, shuffle=True)
     except AttributeError:
         raise Exception(f'Unknown dataset name {dataset}')
 
     # Instantiate model's Module
     if use_clone:
         _model: IWAEClone = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                                             hidden_units_p=_hidden_units_p, bias=_train_dataloader.dataset.get_train_bias())
+                                             hidden_units_p=_hidden_units_p,
+                                             bias=_train_dataloader.dataset.get_train_bias())
         _model.prior.device = _device
     else:
         if model_type == 'vae':
@@ -240,11 +251,15 @@ def train_and_save_checkpoints(seed: int,
     state_name = get_state_name(_train_dataloader.dataset.title, model_type, use_clone, k, num_layers, batch_size)
 
     # Start the training loop
-    train(model=_model, dataloader=_train_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3280,
-          model_type=model_type, state_name=state_name, debug=_debug, device=_device, chkpts_dir_path=chkpts_dir_path)
+    _model = train(model=_model, dataloader=_train_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k,
+                   n_epochs=3280, model_type=model_type, state_name=state_name, debug=_debug, device=_device,
+                   chkpts_dir_path=chkpts_dir_path)
     print('[DONE]')
 
-    calculate_and_display_L5000(_test_dataloader, _model, _device)
+    print('Calculating L_5000...')
+    time.sleep(0.1)
+    calculate_and_display_L5000(_test_dataloader, _model, device=_device)
+    print('[DONE]')
 
     # Save the final checkpoint
     _state_fpath = os.path.join(chkpts_dir_path, state_name + '_final.pkl')
