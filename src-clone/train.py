@@ -1,4 +1,5 @@
 import importlib
+import math
 import os
 import time
 
@@ -18,23 +19,29 @@ import dataloaders
 from dataloaders.omniglot import OmniglotDataloader
 from ifaces import DistributionSampler, DownloadableDataset
 from iwae_clone import IWAEClone
+from modules.vae import VAE
+from modules.iwae import IWAE
 
 
-def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler: LambdaLR, n_epochs: int,
-          model_type: str = 'iwae', debug: bool = False):
+def get_state_name(dataset_title, model_type, use_clone, k, num_layers, batch_size):
+    return f'{dataset_title}_{model_type}{"-clone" if use_clone else ""}_k{k:02d}_L{num_layers}_bs{batch_size}'
+
+
+def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler: LambdaLR, n_epochs: int,
+          model_type: str = 'iwae', state_name: str = '', debug: bool = False, device='cpu', chkpts_dir_path=None):
     # Load checkpoint
-    chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
+    if chkpts_dir_path is None:
+        chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
     if not os.path.exists(chkpts_dir_path) or not os.path.isdir(chkpts_dir_path):
         os.mkdir(chkpts_dir_path)
-    dataset_title = getattr(dataloader.dataset, 'title', type(dataloader.dataset).__name__)
-    state_fname_s = f'{dataset_title}_k{k:02d}_L{len(model.p_layers)}_e__EPOCH__.pkl'
+    state_fname_s = state_name + '_e__EPOCH__.pkl'
     start_epoch = 0
     for i in range(0, 8):
         e = 3 ** i
         state_fpath_e = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{e:03d}'))
         state_fpath = os.path.join(chkpts_dir_path, state_fname_s.replace('__EPOCH__', f'{3 ** (i + 1):03d}'))
         if not os.path.exists(state_fpath) and os.path.exists(state_fpath_e):
-            state_dict = torch.load(state_fpath_e, map_location=model.device)
+            state_dict = torch.load(state_fpath_e, map_location=device)
             model.load_state_dict(state_dict['model'])
             optimizer.load_state_dict(state_dict['optimizer'])
             scheduler.load_state_dict(state_dict['scheduler'])
@@ -57,7 +64,10 @@ def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int
             # Perform forward pass
             if type(x) == list:
                 x = x[0].squeeze()
-            L_k_q = model(x.type(torch.get_default_dtype()).to(model.device), k=k, model_type=model_type)
+            if isinstance(model, IWAEClone):
+                L_k_q = model(x.type(torch.get_default_dtype()).to(device), k=k, model_type=model_type)
+            else:
+                L_k_q = model.objective(x.type(torch.get_default_dtype()).to(device))
             ls.append(-L_k_q.item())
             pbar.set_description(f'[e|{e:03d}/{n_epochs:03d}][l|{np.mean(ls):.03f}] ')
             assert not np.isnan(np.mean(ls))
@@ -80,7 +90,7 @@ def train(model: IWAEClone, dataloader: DataLoader, optimizer: Optimizer, k: int
             print('')
             time.sleep(0.1)
         # After each epoch preview some samples
-        if e % 30 == 0:
+        if e % 30 == 0 and isinstance(model, IWAEClone):
             samples = model.get_samples(100)
             plt.imshow(samples, cmap='Greys')
             plt.axis('off')
@@ -135,9 +145,11 @@ def train_and_save_checkpoints(seed: int,
                                num_layers: int,
                                dataset: str,
                                model_type: str,
+                               use_clone: bool,
                                batch_size: int,
                                debug: bool,
                                dtype=torch.float64,
+                               chkpts_dir_path=None
                                ):
     """
     Method to train one configuration, and output a checkpoint file
@@ -184,19 +196,32 @@ def train_and_save_checkpoints(seed: int,
         raise Exception(f'Unknown dataset name {dataset}')
 
     # Instantiate model's Module
-    _model = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                              hidden_units_p=_hidden_units_p, data_type='binary', device=_device,
-                              bias=_dataloader.dataset.get_train_bias())
+    if use_clone:
+        _model = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
+                                  hidden_units_p=_hidden_units_p, data_type='binary', device=_device,
+                                  bias=_dataloader.dataset.get_train_bias())
+    else:
+        if model_type == 'vae':
+            _model = VAE(k=k, q_dim=_latent_units[0], hidden_dims=_hidden_units_p[0]).to(_device)
+        elif model_type == 'iwae':
+            _model = IWAE(k=k, q_dim=_latent_units[0], hidden_dims=_hidden_units_p[0]).to(_device)
+
     # Instantiate Optimizer & LR-Scheduler
-    _optimizer = optim.Adam(params=_model.params, lr=1e-3, betas=(0.99, 0.999), eps=1e-4)
+    _optimizer = optim.Adam(params=_model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-4)
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
+
+    # Construct general name for checkpoint files
+    state_name = get_state_name(_dataloader.dataset.title, model_type, use_clone, k, num_layers, batch_size)
+
     # Start the training loop
     train(model=_model, dataloader=_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k, n_epochs=3280,
-          model_type=model_type, debug=_debug)
+          model_type=model_type, state_name=state_name, debug=_debug, device=_device, chkpts_dir_path=chkpts_dir_path)
     print('[DONE]')
 
     # Save the final checkpoint
     _chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
+    if not os.path.exists(_chkpts_dir_path):
+        os.mkdir(_chkpts_dir_path)
     _state_fname_s = f'{_dataloader.dataset.title}_k{_k:02d}_L{len(_model.p_layers)}' \
                      f'_bs{batch_size}_{model_type}_final.pkl'
     _state_fpath = os.path.join(_chkpts_dir_path, _state_fname_s)
@@ -218,6 +243,8 @@ if __name__ == '__main__':
                                num_layers=2,
                                dataset='mnist',
                                model_type='iwae',
+                               use_clone=False,
                                batch_size=1000,
                                debug=False,
-                               dtype=torch.float64)
+                               dtype=torch.float64,
+                               chkpts_dir_path='../checkpoints')
