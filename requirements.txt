@@ -14,6 +14,7 @@ Pillow
 pyparsing
 scipy
 torch~=1.10.0
+tornado~=5.1.0
 tqdm
 wget
 humanize~=3.12.0
