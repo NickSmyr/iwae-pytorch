@@ -9,11 +9,12 @@ from torchvision.transforms import transforms
 
 from ifaces import DownloadableDataset
 
+from dataloaders.ConvertData import binarize_batch
 
 class OmniglotDataset(Dataset, DownloadableDataset):
     DTransforms = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Lambda(lambda x: torch.bernoulli(x)),
+        #transforms.Lambda(lambda x: torch.bernoulli(x)),
         transforms.Lambda(lambda x: torch.flatten(x)),
     ])
 
@@ -46,7 +47,7 @@ class OmniglotDataset(Dataset, DownloadableDataset):
 class OmniglotDataloader(DataLoader):
     def __init__(self, train_not_test: bool = True, **kwargs):
         self.dataset = None  # type: OmniglotDataset
-        DataLoader.__init__(self, dataset=OmniglotDataset(train_not_test=train_not_test), **kwargs)
+        DataLoader.__init__(self, dataset=OmniglotDataset(train_not_test=train_not_test), collate_fn=binarize_batch, **kwargs)
 
 
 if __name__ == '__main__':
