@@ -54,6 +54,8 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
                                                                 optimizer.param_groups[0]['lr']))
     time.sleep(0.1)
 
+    print(model)
+
     # Main training loop
     for e in range(start_epoch, n_epochs):
         ls = []
@@ -201,13 +203,15 @@ def train_and_save_checkpoints(seed: int,
     # Instantiate model's Module
     if use_clone:
         _model = IWAEClone.random(latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
-                                  hidden_units_p=_hidden_units_p, data_type='binary', device=_device,
+                                  hidden_units_p=_hidden_units_p, device=_device,
                                   bias=_dataloader.dataset.get_train_bias())
     else:
         if model_type == 'vae':
-            _model = VAE(k=k, q_dim=_latent_units[0], hidden_dims=_hidden_units_p[0]).to(_device)
+            _model = VAE(k=k, latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
+                         hidden_units_p=_hidden_units_p, output_bias=_dataloader.dataset.get_train_bias()).to(_device)
         elif model_type == 'iwae':
-            _model = IWAE(k=k, q_dim=_latent_units[0], hidden_dims=_hidden_units_p[0]).to(_device)
+            _model = IWAE(k=k, latent_units=[28 * 28] + _latent_units, hidden_units_q=_hidden_units_q,
+                          hidden_units_p=_hidden_units_p, output_bias=_dataloader.dataset.get_train_bias()).to(_device)
 
     # Instantiate Optimizer & LR-Scheduler
     _optimizer = optim.Adam(params=_model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-4)
@@ -241,13 +245,13 @@ def train_and_save_checkpoints(seed: int,
 if __name__ == '__main__':
     DownloadableDataset.set_data_directory('../data')
     train_and_save_checkpoints(seed=42,
-                               cuda=True,
-                               k=10,
-                               num_layers=1,
+                               cuda=False,
+                               k=1,
+                               num_layers=2,
                                dataset='mnist',
-                               model_type='iwae',
-                               use_clone=True,
+                               model_type='vae',
+                               use_clone=False,
                                batch_size=100,
                                debug=False,
-                               dtype=torch.float64,
+                               dtype=torch.float32,
                                chkpts_dir_path='../checkpoints')

@@ -134,19 +134,17 @@ class IWAEClone(nn.Module):
         return reshape_and_tile_images(self.last_p_layer_weights_np().T)
 
     def measure_marginal_log_likelihood(self, dataloader: DataLoader, k: int = 50, dataset_type: str = 'test'):
-        self.eval()
         s = []
-        i, N = 1., 0
+        N = 0
         pbar = tqdm(dataloader)
-        for x in pbar:
-            if type(x) == list:
-                x = x[0].squeeze()
-            N += x.shape[0]
-            s.append(
-                self.log_marginal_likelihood_estimate(x.type(torch.get_default_dtype()).to(self.device), k=k)
-                    .detach().cpu().numpy()
-            )
-            pbar.set_description(f'[mean(s)|{np.mean(s) / i:.03f}] ')
-            i += 1.
-        self.train()
+        with torch.no_grad():
+            for x in pbar:
+                if type(x) == list:
+                    x = x[0].squeeze()
+                N += x.shape[0]
+                s.append(
+                    self.log_marginal_likelihood_estimate(x.type(torch.get_default_dtype()).to(self.device), k=k)
+                        .detach().cpu().numpy()
+                )
+                pbar.set_description(f'[mean(s)|{np.mean(s):.03f}] ')
         return s / N

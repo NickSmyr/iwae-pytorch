@@ -1,25 +1,14 @@
 from itertools import chain
-from typing import Optional, List
+from typing import Optional
 import math
 
 import torch
 from torch import nn
 
+from samplers.gaussian import Exponential
 from utils.logging import CommandLineLogger
 
-
-half_log2pi = 1.0/2.0 * math.log(2.0 * math.pi)
-
-
-class Exponential(nn.Module):
-    """
-    An exponential output unit.
-    """
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return torch.exp(x)
+half_log2pi = 1.0 / 2.0 * math.log(2.0 * math.pi)
 
 
 def calc_log_likelihood_of_samples_gaussian(samples, mean, sigma):
@@ -44,13 +33,14 @@ class GaussianStochasticLayer(nn.Module):
     """
     A gaussian stochastic layer.
     """
+
     def __init__(
-        self,
-        input_dim,
-        hidden_dims,
-        output_dim,
-        use_bias: bool = True,
-        output_bias = None):
+            self,
+            input_dim,
+            hidden_dims,
+            output_dim,
+            use_bias: bool = True,
+            output_bias=None):
         """
         Constructor for a stochastic layer.
         :param (int) input_dim: input dimension for layer
@@ -68,11 +58,10 @@ class GaussianStochasticLayer(nn.Module):
 
         # Sampler
         self.mean_network = nn.Linear(hidden_dims[-1], output_dim, bias=use_bias)
-        if not output_bias is None:
+        if output_bias is not None:
             with torch.no_grad():
                 self.mean_network.bias.copy_(output_bias)
         self.sigma_network = nn.Sequential(nn.Linear(hidden_dims[-1], output_dim), Exponential())
-
 
     def calc_mean_sigma(self, x):
         hidden = self.hidden_network(x)
@@ -81,7 +70,6 @@ class GaussianStochasticLayer(nn.Module):
         sigma = self.sigma_network(hidden)
 
         return mean, sigma
-
 
     def forward(self, x):
         """
@@ -93,7 +81,6 @@ class GaussianStochasticLayer(nn.Module):
 
         return samples
 
-
     def calc_log_likelihood(self, x, samples):
         """
         Calculate p(x|samples,theta)
@@ -104,18 +91,18 @@ class GaussianStochasticLayer(nn.Module):
         return p
 
 
-
 class BernoulliStochasticLayer(nn.Module):
     """
     A bernoulli stochastic layer.
     """
+
     def __init__(
-        self,
-        input_dim,
-        hidden_dims,
-        output_dim,
-        use_bias: bool = True,
-        output_bias = None):
+            self,
+            input_dim,
+            hidden_dims,
+            output_dim,
+            use_bias: bool = True,
+            output_bias=None):
         """
         Constructor for a stochastic layer.
         :param (int) input_dim: input dimension for layer
@@ -133,28 +120,23 @@ class BernoulliStochasticLayer(nn.Module):
 
         # Sampler
         mean_linear = nn.Linear(hidden_dims[-1], output_dim, bias=use_bias)
-        if not output_bias is None:
+        if output_bias is not None:
             with torch.no_grad():
                 mean_linear.bias.copy_(output_bias)
         self.mean_network = nn.Sequential(mean_linear, nn.Sigmoid())
 
-
     def calc_mean(self, x):
         hidden = self.hidden_network(x)
         mean = self.mean_network(hidden)
-
         return mean
-
 
     def forward(self, x):
         """
         Calculate output samples from layer given input
         """
         mean = self.calc_mean(x)
-        samples = torch.bernoulli(mean)
-
+        samples = torch.bernoulli(mean).type(mean.type())
         return samples
-
 
     def calc_log_likelihood(self, x, samples):
         """
@@ -166,7 +148,6 @@ class BernoulliStochasticLayer(nn.Module):
         return p
 
 
-
 class VAE(nn.Module):
     """
     VAE Class:
@@ -174,29 +155,20 @@ class VAE(nn.Module):
     """
 
     def __init__(
-        self,
-        k: int = 1,
-        c_in: int = 1,
-        w_in_width: int = 28,
-        w_in_height: int = 28,
-        L: int = 1,
-        q_dim: List[int] = 64,
-        p_dim: Optional[int] = None,
-        use_bias: bool = True,
-        output_bias = None,
-        hidden_dims: Optional[List[List[int]]] = None,
-        logger: Optional[CommandLineLogger] = None):
+            self,
+            k: int = 1,
+            latent_units=None,
+            hidden_units_q=None,
+            hidden_units_p=None,
+            output_bias=None,
+            logger: Optional[CommandLineLogger] = None):
         """
         VAE class constructor.
         :param (int) k: number of samples per data point
-        :param (int) c_in: number of input channels
-        :param (int) w_in_width: width of input
-        :param (int) w_in_height: height of input
-        :param (int) L: number of stochastic layers
-        :param (int) q_dim: encoder's output dim
-        :param (optional) p_dim: decoder's input dim (i.e. dimensionality of samples), or None to be the same as q_dim
-        :param (bool) use_bias: set to True to add bias to the fully-connected (aka Linear) layers of the networks
-        :param (optional) hidden_dims: number of neurons in encoder's hidden layers (and decoder's respective ones)
+        :param (list) latent_units: number of neurons in the output of every stochastic layer
+        :param (list) hidden_units_q: number of neurons in encoder's stochastic layers
+        :param (list) hidden_units_p: number of neurons in decoder's stochastic layers
+        :param (bool) output_bias: hardcoded bias of output layer
         :param (optional) logger: CommandLineLogger instance to be used when verbose is enabled
         """
         nn.Module.__init__(self)
@@ -204,47 +176,57 @@ class VAE(nn.Module):
 
         self.k = k
 
-        # Set defaults
-        if hidden_dims is None:
-            hidden_dims = [[1024, 512, 32] for l in range(L)]
-        if p_dim is None:
-            p_dim = q_dim[-1]
-
-        input_dim = c_in * w_in_width * w_in_height
+        # Set default arguments
+        if latent_units is None:
+            latent_units = [50]
+        if hidden_units_p is None:
+            hidden_units_p = [[200, 200]]
+        if hidden_units_q is None:
+            hidden_units_q = [[200, 200]]
 
         # Encoder Network
-
-        self.encoder_layers = []
-
-        self.encoder_layers.append(GaussianStochasticLayer(input_dim, hidden_dims[0], q_dim[0], use_bias, None))
-        for l in range(1, L):
-            print("added one layer")
-            self.encoder_layers.append(
-                    GaussianStochasticLayer(q_dim[l-1], hidden_dims[l], q_dim[l], use_bias, None)
-                )
-
+        layers_q = []
+        for units_prev, units_next, hidden_units in zip(latent_units, latent_units[1:], hidden_units_q):
+            layers_q.append(
+                GaussianStochasticLayer(units_prev, hidden_units, units_next, use_bias=True, output_bias=None)
+            )
+        self.encoder_layers = nn.ModuleList(layers_q)
         self.encoder = nn.Sequential(*self.encoder_layers)
 
         # Decoder Network
-        # We reverse the whole inputs values
-        hidden_dims_reversed = list(reversed([list(reversed(hidden_dims[i])) for i in range(len(hidden_dims))]))
-        q_dim_reversed = list(reversed(q_dim))
-
-        self.decoder_layers = []
-
-        if L > 1:
-                self.decoder_layers.append(GaussianStochasticLayer(p_dim, hidden_dims_reversed[0], q_dim_reversed[0], use_bias, None))
-
-                for l in range(1, L-1):
-                    self.decoder_layers.append(
-                            GaussianStochasticLayer(q_dim_reversed[l-1], hidden_dims_reversed[l], q_dim_reversed[l], use_bias, None)
-                        )
+        layers_p = []
+        for units_prev, units_next, hidden_units in \
+                zip(list(reversed(latent_units))[:-1], list(reversed(latent_units))[1:-1], hidden_units_p[:-1]):
+            layers_p.append(
+                GaussianStochasticLayer(units_prev, hidden_units, units_next, use_bias=True, output_bias=None)
+            )
         # Last layer is a Bernoulli
-        self.decoder_layers.append(BernoulliStochasticLayer(q_dim_reversed[L-1], hidden_dims_reversed[L-1], input_dim, use_bias, None))
-
+        layers_p.append(
+            BernoulliStochasticLayer(latent_units[1], hidden_units_p[-1], latent_units[0], use_bias=True,
+                                     output_bias=output_bias)
+        )
+        self.decoder_layers = nn.ModuleList(layers_p)
         self.decoder = nn.Sequential(*self.decoder_layers)
-        # self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, use_bias, output_bias)
-
+        # We reverse the whole inputs values
+        # hidden_dims_reversed = list(reversed([list(reversed(hidden_dims[i])) for i in range(len(hidden_dims))]))
+        # q_dim_reversed = list(reversed(q_dim))
+        #
+        # self.decoder_layers = torch.nn.ModuleList()
+        #
+        # self.decoder_layers.append(
+        #     GaussianStochasticLayer(p_dim, hidden_dims_reversed[0], q_dim_reversed[0], use_bias, None))
+        #
+        # for l in range(1, L - 1):
+        #     self.decoder_layers.append(
+        #         GaussianStochasticLayer(q_dim_reversed[l - 1], hidden_dims_reversed[l], q_dim_reversed[l], use_bias,
+        #                                 None)
+        #     )
+        # # Last layer is a Bernoulli
+        # self.decoder_layers.append(
+        #     BernoulliStochasticLayer(q_dim_reversed[L - 1], hidden_dims_reversed[L - 1], input_dim, use_bias, None))
+        #
+        # self.decoder = nn.Sequential(*self.decoder_layers)
+        # # self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, use_bias, output_bias)
 
     def forward(self, x):
         h_samples = self.encoder(x)
@@ -252,21 +234,19 @@ class VAE(nn.Module):
 
         return x_samples
 
-
     def calc_log_p(self, x, h_samples):
         """
         Calculate log p(x,h|theta)
         """
         # Calculate prior: log p(h|theta)
-        prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples), torch.ones_like(h_samples))
+        prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples),
+                                                        torch.ones_like(h_samples))
 
         # Calculate log p(x|h,theta)
         p = 0
-
         p += self.decoder_layers[-1].calc_log_likelihood(x, h_samples)
 
         return prior + p
-
 
     def calc_log_q(self, h_samples, x):
         """
@@ -276,22 +256,33 @@ class VAE(nn.Module):
         samples = [h_samples]
         for i in range(len(self.encoder_layers)):
             # q_list.append(self.encoder_layers[i].calc_log_likelihood(samples[i], x))
-            samples.append(self.encoder_layers[i].forward(samples[i]))
+            samples.append(self.encoder_layers[i](samples[i]))
 
         return sum(q_list)
-
 
     def calc_log_w(self, x):
         """
         Calculate log w(x,h,theta) = log p(x,h|theta) - log q(h|x)
         """
-        h_samples = self.encoder.forward(x)
+        # h_samples = self.encoder(x)
+        # log_p = self.calc_log_p(x, h_samples)
+        # log_q = self.calc_log_q(h_samples, x)
+        # return log_p - log_q
+        h_samples = [x]
+        for layer in self.encoder_layers:
+            h_samples.append(layer(h_samples[-1]))
+        return self.log_weights_from_q_samples(h_samples)
 
-        log_p = self.calc_log_p(x, h_samples)
-        log_q = self.calc_log_q(h_samples, x)
-
-        return log_p - log_q
-
+    def log_weights_from_q_samples(self, q_samples):
+        log_weights = torch.zeros(q_samples[-1].shape[0], device=q_samples[-1].device)
+        for layer_q, layer_p, prev_sample, next_sample in zip(self.encoder_layers, reversed(self.decoder_layers),
+                                                              q_samples, q_samples[1:]):
+            log_weights += layer_p.calc_log_likelihood(prev_sample.clone(), next_sample.clone()) - \
+                           layer_q.calc_log_likelihood(next_sample, prev_sample)
+        # log_weights += self.prior.log_likelihood(q_samples[-1])
+        log_weights += calc_log_likelihood_of_samples_gaussian(q_samples[-1], torch.zeros_like(q_samples[-1]),
+                                                               torch.ones_like(q_samples[-1]))
+        return log_weights
 
     def objective(self, x):
         """
@@ -302,7 +293,6 @@ class VAE(nn.Module):
         log_w = self.calc_log_w(x)
 
         return -torch.sum(log_w) / self.k
-
 
     def estimate_loss(self, x, k=1):
         """

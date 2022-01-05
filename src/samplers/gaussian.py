@@ -105,7 +105,8 @@ class GaussianSampler(nn.Module, DistributionSampler):
         mean_network = nn.Linear(n_units[-2], n_units[-1])
         mean_network.apply(GaussianSampler.init_weights)
         if mean is not None:
-            mean_network.bias.data.copy_(mean)
+            with torch.no_grad():
+                mean_network.bias.copy_(mean)
         sigma_network = nn.Sequential(
             nn.Linear(n_units[-2], n_units[-1]),
             Exponential(),
