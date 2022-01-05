@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -61,7 +62,7 @@ class IWAEClone(nn.Module):
         if model_type in ['vae', 'VAE']:
             L_q = - (1.0 / k) * torch.sum(log_ws, dim=0)
         else:
-            L_q = - (1.0 / k) * torch.dot(ws_normalized_vector.detach(), log_ws)
+            L_q = - torch.dot(ws_normalized_vector.detach(), log_ws)
         return L_q
 
     def log_marginal_likelihood_estimate(self, x, k):
@@ -134,15 +135,18 @@ class IWAEClone(nn.Module):
 
     def measure_marginal_log_likelihood(self, dataloader: DataLoader, k: int = 50, dataset_type: str = 'test'):
         self.eval()
-        s = torch.tensor(0.0).to(self.device)
+        s = []
         i, N = 1., 0
         pbar = tqdm(dataloader)
         for x in pbar:
             if type(x) == list:
                 x = x[0].squeeze()
             N += x.shape[0]
-            s += self.log_marginal_likelihood_estimate(x.type(torch.get_default_dtype()).to(self.device), k=k)
-            pbar.set_description(f'[mean(s)|{s.cpu().numpy() / i:.03f}] ')
+            s.append(
+                self.log_marginal_likelihood_estimate(x.type(torch.get_default_dtype()).to(self.device), k=k)
+                    .detach().cpu().numpy()
+            )
+            pbar.set_description(f'[mean(s)|{np.mean(s) / i:.03f}] ')
             i += 1.
         self.train()
         return s / N

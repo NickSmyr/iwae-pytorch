@@ -11,7 +11,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 # noinspection PyProtectedMember
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+from tqdm.autonotebook import tqdm
 
 # noinspection PyUnresolvedReferences
 import dataloaders
@@ -159,9 +159,12 @@ def train_and_save_checkpoints(seed: int,
     :param num_layers: The number of stochastic layers
     :param dataset: The dataset to train on. One of ["mnist", "binarymnist", "omniglot"]
     :param model_type: The model to use. One of ["vae", "iwae"]
+    :param use_clone: set to True to use the clone of the origianl model (aka IWAEClone); otherwise our own
+                      implementation will be used
     :param batch_size: The batch size to use
     :param debug: If True, will execute only one epoch of the training process
     :param dtype: one of `torch.float64` (or `torch.double`), `torch.float32` (or `torch.float`)
+    :param chkpts_dir_path: absolute path to checkpoints directory
     """
     if cuda:
         assert torch.cuda.is_available(), "No CUDA CPU available."
@@ -239,12 +242,12 @@ if __name__ == '__main__':
     DownloadableDataset.set_data_directory('../data')
     train_and_save_checkpoints(seed=42,
                                cuda=True,
-                               k=50,
-                               num_layers=2,
+                               k=10,
+                               num_layers=1,
                                dataset='mnist',
                                model_type='iwae',
-                               use_clone=False,
-                               batch_size=1000,
+                               use_clone=True,
+                               batch_size=100,
                                debug=False,
                                dtype=torch.float64,
                                chkpts_dir_path='../checkpoints')
