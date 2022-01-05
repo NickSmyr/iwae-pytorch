@@ -179,11 +179,12 @@ class VAE(nn.Module):
         c_in: int = 1,
         w_in_width: int = 28,
         w_in_height: int = 28,
-        q_dim: int = 64,
+        L: int = 1,
+        q_dim: List[int] = 64,
         p_dim: Optional[int] = None,
         use_bias: bool = True,
         output_bias = None,
-        hidden_dims: Optional[List[int]] = None,
+        hidden_dims: Optional[List[List[int]]] = None,
         logger: Optional[CommandLineLogger] = None):
         """
         VAE class constructor.
@@ -191,6 +192,7 @@ class VAE(nn.Module):
         :param (int) c_in: number of input channels
         :param (int) w_in_width: width of input
         :param (int) w_in_height: height of input
+        :param (int) L: number of stochastic layers
         :param (int) q_dim: encoder's output dim
         :param (optional) p_dim: decoder's input dim (i.e. dimensionality of samples), or None to be the same as q_dim
         :param (bool) use_bias: set to True to add bias to the fully-connected (aka Linear) layers of the networks
@@ -204,17 +206,42 @@ class VAE(nn.Module):
 
         # Set defaults
         if hidden_dims is None:
-            hidden_dims = [1024, 512, 32]
+            hidden_dims = [[1024, 512, 32] for l in range(L)]
         if p_dim is None:
-            p_dim = q_dim
+            p_dim = q_dim[-1]
 
         input_dim = c_in * w_in_width * w_in_height
 
         # Encoder Network
-        self.encoder = GaussianStochasticLayer(input_dim, hidden_dims, q_dim, use_bias, None)
+
+        self.encoder_layers = torch.nn.ModuleList()
+        self.encoder_layers.append(GaussianStochasticLayer(input_dim, hidden_dims[0], q_dim[0], use_bias, None))
+
+        for l in range(1, L):
+            self.encoder_layers.append(
+                    GaussianStochasticLayer(q_dim[l-1], hidden_dims[l], q_dim[l], use_bias, None)
+                )
+
+        self.encoder = nn.Sequential(*self.encoder_layers)
 
         # Decoder Network
-        self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, use_bias, output_bias)
+        # We reverse the whole inputs values
+        hidden_dims_reversed = list(reversed([list(reversed(hidden_dims[i])) for i in range(len(hidden_dims))]))
+        q_dim_reversed = list(reversed(q_dim))
+
+        self.decoder_layers = torch.nn.ModuleList()
+
+        self.decoder_layers.append(GaussianStochasticLayer(p_dim, hidden_dims_reversed[0], q_dim_reversed[0], use_bias, None))
+
+        for l in range(1, L-1):
+            self.decoder_layers.append(
+                    GaussianStochasticLayer(q_dim_reversed[l-1], hidden_dims_reversed[l], q_dim_reversed[l], use_bias, None)
+                )
+        # Last layer is a Bernoulli
+        self.decoder_layers.append(BernoulliStochasticLayer(q_dim_reversed[L-1], hidden_dims_reversed[L-1], input_dim, use_bias, None))
+
+        self.decoder = nn.Sequential(*self.decoder_layers)
+        # self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, use_bias, output_bias)
 
 
     def forward(self, x):
@@ -232,16 +259,21 @@ class VAE(nn.Module):
         prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples), torch.ones_like(h_samples))
 
         # Calculate log p(x|h,theta)
-        p = self.decoder.calc_log_likelihood(x, h_samples)
+        p = []
+        samples = [h_samples]
 
-        return prior + p
+        for i in range(len(self.decoder_layers)):
+            p.append(self.decoder_layers[i].calc_log_likelihood(x, samples[i]))
+            samples.append(self.decoder_layers[i].forward(samples[i]))
+
+        return prior + torch.sum(p)
 
 
     def calc_log_q(self, h_samples, x):
         """
         Calculate log q(h|x)
         """
-        q = self.encoder.calc_log_likelihood(h_samples, x)
+        q = GaussianStochasticLayer.calc_log_likelihood(h_samples, x)
 
         return q
 
