@@ -214,10 +214,11 @@ class VAE(nn.Module):
 
         # Encoder Network
 
-        self.encoder_layers = torch.nn.ModuleList()
-        self.encoder_layers.append(GaussianStochasticLayer(input_dim, hidden_dims[0], q_dim[0], use_bias, None))
+        self.encoder_layers = []
 
+        self.encoder_layers.append(GaussianStochasticLayer(input_dim, hidden_dims[0], q_dim[0], use_bias, None))
         for l in range(1, L):
+            print("added one layer")
             self.encoder_layers.append(
                     GaussianStochasticLayer(q_dim[l-1], hidden_dims[l], q_dim[l], use_bias, None)
                 )
@@ -229,14 +230,15 @@ class VAE(nn.Module):
         hidden_dims_reversed = list(reversed([list(reversed(hidden_dims[i])) for i in range(len(hidden_dims))]))
         q_dim_reversed = list(reversed(q_dim))
 
-        self.decoder_layers = torch.nn.ModuleList()
+        self.decoder_layers = []
 
-        self.decoder_layers.append(GaussianStochasticLayer(p_dim, hidden_dims_reversed[0], q_dim_reversed[0], use_bias, None))
+        if L > 1:
+                self.decoder_layers.append(GaussianStochasticLayer(p_dim, hidden_dims_reversed[0], q_dim_reversed[0], use_bias, None))
 
-        for l in range(1, L-1):
-            self.decoder_layers.append(
-                    GaussianStochasticLayer(q_dim_reversed[l-1], hidden_dims_reversed[l], q_dim_reversed[l], use_bias, None)
-                )
+                for l in range(1, L-1):
+                    self.decoder_layers.append(
+                            GaussianStochasticLayer(q_dim_reversed[l-1], hidden_dims_reversed[l], q_dim_reversed[l], use_bias, None)
+                        )
         # Last layer is a Bernoulli
         self.decoder_layers.append(BernoulliStochasticLayer(q_dim_reversed[L-1], hidden_dims_reversed[L-1], input_dim, use_bias, None))
 
@@ -259,23 +261,24 @@ class VAE(nn.Module):
         prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples), torch.ones_like(h_samples))
 
         # Calculate log p(x|h,theta)
-        p = []
-        samples = [h_samples]
+        p = 0
 
-        for i in range(len(self.decoder_layers)):
-            p.append(self.decoder_layers[i].calc_log_likelihood(x, samples[i]))
-            samples.append(self.decoder_layers[i].forward(samples[i]))
+        p += self.decoder_layers[-1].calc_log_likelihood(x, h_samples)
 
-        return prior + torch.sum(p)
+        return prior + p
 
 
     def calc_log_q(self, h_samples, x):
         """
         Calculate log q(h|x)
         """
-        q = GaussianStochasticLayer.calc_log_likelihood(h_samples, x)
+        q_list = []
+        samples = [h_samples]
+        for i in range(len(self.encoder_layers)):
+            # q_list.append(self.encoder_layers[i].calc_log_likelihood(samples[i], x))
+            samples.append(self.encoder_layers[i].forward(samples[i]))
 
-        return q
+        return sum(q_list)
 
 
     def calc_log_w(self, x):
