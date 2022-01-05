@@ -6,7 +6,7 @@ def validate(dataloader, model, device, loss_parameters={}):
     num_data_points = 0
 
     with torch.no_grad():
-        for X, y in dataloader:
+        for X in dataloader:
             num_data_points += len(X)
             X = X.to(device)
             loss = torch.sum(model.estimate_loss(X, **loss_parameters))

@@ -2,9 +2,9 @@ import torch
 import utils.persistence as persistence
 from tqdm.auto import tqdm
 
-from torch.utils.data import Dataset, DataLoader
-from torchvision import datasets
-from torchvision.transforms import ToTensor, Compose, Lambda
+
+import dataloaders.mnist
+from ifaces import DownloadableDataset
 
 import matplotlib.pyplot as plt
 
@@ -43,27 +43,28 @@ k = 5
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 print(f"Using {device} device")
 
-training_data = datasets.MNIST(
-    root='data',
-    train=True,
-    download=True,
-    transform=Compose([ToTensor(), Lambda(lambda x: torch.bernoulli(torch.flatten(x)))])
-)
+DownloadableDataset.set_data_directory('../data')
+train_dataloader = dataloaders.mnist.MnistDataloader(
+    train_not_test=True,
+    batch_size=train_batch_size,
+    pin_memory=True,
+    shuffle=True)
 
-test_data = datasets.MNIST(
-    root='data',
-    train=False,
-    download=True,
-    transform=Compose([ToTensor(), Lambda(lambda x: torch.bernoulli(torch.flatten(x)))])
-)
+validation_dataloader = dataloaders.mnist.MnistDataloader(
+    train_not_test=False,
+    batch_size=validation_batch_size,
+    pin_memory=True,
+    shuffle=True)
 
-train_dataloader = DataLoader(training_data, batch_size=train_batch_size, pin_memory=True)
-validation_dataloader = DataLoader(test_data, batch_size=validation_batch_size, pin_memory=True)
-final_validation_dataloader = DataLoader(test_data, batch_size=final_validation_batch_size, pin_memory=True)
+final_validation_dataloader = dataloaders.mnist.MnistDataloader(
+    train_not_test=False,
+    batch_size=final_validation_batch_size,
+    pin_memory=True,
+    shuffle=True)
 
 # Initialize bias of output unit based on means of training data
-mean_of_training_data = torch.stack([d for d, l in training_data]).mean(0)
-output_bias = -torch.log(1 / torch.clamp(mean_of_training_data, 0.0001, 0.9999) - 1)
+# mean_of_training_data = torch.stack([d for d, l in training_data]).mean(0)
+# output_bias = -torch.log(1 / torch.clamp(mean_of_training_data, 0.0001, 0.9999) - 1)
 
 
 if model_type == 'AE':
@@ -148,7 +149,7 @@ plt.ylabel('Estimate of the lower bound of the log-likelihood')
 
 plt.subplots(2, 10)
 for i in range(10):
-    X = test_data[i][0].to(device)
+    X = final_validation_dataloader.dataset[i].to(device)
     pred = model(X)
 
     plt.subplot(2, 10, i + 1)

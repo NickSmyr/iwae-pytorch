@@ -2,10 +2,10 @@ def train(dataloader, model, optimizer, device):
 
     size = len(dataloader.dataset)
 
-    for batch, (X, y) in enumerate(dataloader):
+    for batch, X in enumerate(dataloader):
         # Move data to GPU
         X = X.to(device)
-        
+
         # Compute objective function
         objective = model.objective(X)
 
