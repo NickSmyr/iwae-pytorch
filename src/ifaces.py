@@ -30,11 +30,11 @@ class DistributionSampler(metaclass=abc.ABCMeta):
 
     @staticmethod
     def set_seed(seed: int) -> int:
-        assert os.environ.get('RNG_SEED') is None, 'seed had already been set'
-        os.environ['RNG_SEED'] = str(seed)
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        random.seed(seed)
+        if os.environ.get('RNG_SEED') is None:
+            os.environ['RNG_SEED'] = str(seed)
+            torch.manual_seed(seed)
+            np.random.seed(seed)
+            random.seed(seed)
 
 
 class DownloadableDataset(metaclass=abc.ABCMeta):
