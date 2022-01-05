@@ -49,7 +49,6 @@ class GaussianStochasticLayer(nn.Module):
         input_dim,
         hidden_dims,
         output_dim,
-        device = "cpu",
         use_bias: bool = True,
         output_bias = None):
         """
@@ -60,8 +59,6 @@ class GaussianStochasticLayer(nn.Module):
         :param (bool) use_bias: set to True to add bias to the fully-connected (aka Linear) layers of the networks
         """
         nn.Module.__init__(self)
-
-        self.device = device
 
         # Hidden network
         self.hidden_network = nn.Sequential(*chain.from_iterable(
@@ -91,7 +88,7 @@ class GaussianStochasticLayer(nn.Module):
         Calculate output samples from layer given input
         """
         mean, sigma = self.calc_mean_sigma(x)
-        epsilon_samples = torch.randn(mean.size()).to(device=self.device)
+        epsilon_samples = torch.randn_like(mean)
         samples = mean + epsilon_samples * sigma
 
         return samples
@@ -117,7 +114,6 @@ class BernoulliStochasticLayer(nn.Module):
         input_dim,
         hidden_dims,
         output_dim,
-        device = "cpu",
         use_bias: bool = True,
         output_bias = None):
         """
@@ -128,8 +124,6 @@ class BernoulliStochasticLayer(nn.Module):
         :param (bool) use_bias: set to True to add bias to the fully-connected (aka Linear) layers of the networks
         """
         nn.Module.__init__(self)
-
-        self.device = device
 
         # Hidden network
         self.hidden_network = nn.Sequential(*chain.from_iterable(
@@ -157,7 +151,7 @@ class BernoulliStochasticLayer(nn.Module):
         Calculate output samples from layer given input
         """
         mean = self.calc_mean(x)
-        samples = torch.bernoulli(mean).to(device=self.device)
+        samples = torch.bernoulli(mean)
 
         return samples
 
@@ -187,7 +181,6 @@ class VAE(nn.Module):
         w_in_height: int = 28,
         q_dim: int = 64,
         p_dim: Optional[int] = None,
-        device = "cpu",
         use_bias: bool = True,
         output_bias = None,
         hidden_dims: Optional[List[int]] = None,
@@ -208,7 +201,6 @@ class VAE(nn.Module):
         self.logger = CommandLineLogger(name=self.__class__.__name__) if logger is None else logger
 
         self.k = k
-        self.device = device
 
         # Set defaults
         if hidden_dims is None:
@@ -219,10 +211,10 @@ class VAE(nn.Module):
         input_dim = c_in * w_in_width * w_in_height
 
         # Encoder Network
-        self.encoder = GaussianStochasticLayer(input_dim, hidden_dims, q_dim, device, use_bias, None)
+        self.encoder = GaussianStochasticLayer(input_dim, hidden_dims, q_dim, use_bias, None)
 
         # Decoder Network
-        self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, device, use_bias, output_bias)
+        self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, use_bias, output_bias)
 
 
     def forward(self, x):

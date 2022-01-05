@@ -40,7 +40,7 @@ model_type = 'IWAE'
 k = 5
 
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 print(f"Using {device} device")
 
 training_data = datasets.MNIST(
@@ -71,9 +71,9 @@ if model_type == 'AE':
 elif model_type == 'VAE':
     # Single stochastic layer architecture from IWAE paper
     # Disable initialization of output bias for now
-    model = VAE(k=k, q_dim=50, hidden_dims=[200, 200], device=device)#, output_bias=output_bias)
+    model = VAE(k=k, q_dim=50, hidden_dims=[200, 200])#, output_bias=output_bias)
 elif model_type == 'IWAE':
-    model = IWAE(k=k, q_dim=50, hidden_dims=[200, 200], device=device)
+    model = IWAE(k=k, q_dim=50, hidden_dims=[200, 200])
 else:
     print(f"Unknown model type: {model_type}")
     exit(1)
