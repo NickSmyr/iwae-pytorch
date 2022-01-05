@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 import torch.random
-#import wget
+import wget
 
 # noinspection PyPep8Naming
 import dataloaders.ConvertData as converters
