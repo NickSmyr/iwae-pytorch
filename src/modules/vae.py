@@ -1,3 +1,4 @@
+import sys
 from itertools import chain
 from typing import Optional
 import math
@@ -17,7 +18,8 @@ def calc_log_likelihood_of_samples_gaussian(samples, mean, sigma):
     """
     Calculate log p(samples|mean, sigma) assuming a gaussian distribution
     """
-    result = -torch.log(sigma) - half_log2pi - 1.0 / 2.0 * torch.square((samples - mean) / sigma)
+    eps = sys.float_info.epsilon
+    result = -torch.log(sigma + eps) - half_log2pi - 1.0 / 2.0 * torch.square((samples - mean) / sigma)
     result = torch.sum(result, dim=1)
     return result
 
@@ -149,7 +151,8 @@ class BernoulliStochasticLayer(nn.Module):
         Calculate p(x|samples,theta)
         """
         mean = self.calc_mean(samples)
-        p = calc_log_likelihood_of_samples_bernoulli(x, mean)
+        eps = sys.float_info.epsilon
+        p = calc_log_likelihood_of_samples_bernoulli(x, mean + eps)
 
         return p
 

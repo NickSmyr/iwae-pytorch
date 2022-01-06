@@ -1,3 +1,4 @@
+import sys
 from itertools import chain
 from typing import Optional
 
@@ -22,11 +23,12 @@ class BernoulliSampler(nn.Module, DistributionSampler):
     def sample(self, shape_or_x: tuple or torch.Tensor) -> torch.Tensor:
         assert type(shape_or_x) == torch.Tensor
         mean = self.get_mean(x=shape_or_x)
-        return torch.bernoulli(mean).type(mean.type())
+        return torch.bernoulli(mean)
 
     def log_likelihood(self, samples: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         mean = self.get_mean(x)
-        return torch.sum(samples * torch.log(mean) + (1.0 - samples) * torch.log(1.0 - mean), dim=1)
+        eps = sys.float_info.epsilon
+        return torch.sum(samples * torch.log(mean + eps) + (1.0 - samples) * torch.log(1.0 - mean + eps), dim=1)
 
     def last_linear_layer_weights_np(self):
         return self.mean_network[-2].weight.data.clone().detach().cpu().numpy()

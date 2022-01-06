@@ -11,6 +11,8 @@ def validate(dataloader, model, device, loss_parameters={}):
     with torch.no_grad():
         pbar = tqdm(dataloader)
         for X in pbar:
+            if type(X) == list:
+                X = X[0].squeeze()
             num_data_points += len(X)
             X = X.type(torch.get_default_dtype()).to(device)
             if type(dataloader) != BinaryMnistDataloader:

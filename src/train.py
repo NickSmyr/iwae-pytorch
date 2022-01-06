@@ -281,41 +281,15 @@ def train_and_save_checkpoints(seed: int,
 
 if __name__ == '__main__':
     DownloadableDataset.set_data_directory('../data')
-    # train_and_save_checkpoints(seed=42,
-    #                            cuda=True,
-    #                            k=1,
-    #                            num_layers=2,
-    #                            dataset='mnist',
-    #                            model_type='iwae',
-    #                            use_clone=False,
-    #                            batch_size=400,
-    #                            debug=False,
-    #                            dtype=torch.float32,
-    #                            chkpts_dir_path='../checkpoints')
-    #
-    # torch.cuda.empty_cache()
-    # train_and_save_checkpoints(seed=42,
-    #                            cuda=True,
-    #                            k=5,
-    #                            num_layers=2,
-    #                            dataset='mnist',
-    #                            model_type='iwae',
-    #                            use_clone=False,
-    #                            batch_size=400,
-    #                            debug=False,
-    #                            dtype=torch.float32,
-    #                            chkpts_dir_path='../checkpoints')
-
-    torch.cuda.empty_cache()
     train_and_save_checkpoints(seed=42,
                                cuda=True,
                                k=50,
                                num_layers=2,
-                               dataset='mnist',
+                               dataset='fashion_mnist',
                                model_type='iwae',
-                               use_clone=False,
+                               use_clone=True,
                                batch_size=400,
-                               debug=True,
+                               debug=False,
                                dtype=torch.float32,
                                chkpts_dir_path='../checkpoints',
                                use_grad_clip=False)
@@ -324,4 +298,4 @@ if __name__ == '__main__':
     # --------
     # IWAE L=2 | k=1 : -86.53
     # IWAE L=2 | k=5 : -84.14
-    # IWAE L=2 | k=50:
+    # IWAE L=2 | k=50: -83.43
