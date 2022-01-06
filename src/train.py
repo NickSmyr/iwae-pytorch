@@ -5,7 +5,7 @@ import time
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from torch import optim
+from torch import optim, nn
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 # noinspection PyProtectedMember
@@ -34,7 +34,8 @@ def calculate_and_display_L5000(test_dataloader, model, device):
 
 
 def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler: LambdaLR, n_epochs: int,
-          model_type: str = 'iwae', state_name: str = '', debug: bool = False, device='cpu', chkpts_dir_path=None):
+          model_type: str = 'iwae', state_name: str = '', debug: bool = False, device='cpu', chkpts_dir_path=None,
+          use_grad_clip: bool = False):
     # Load checkpoint
     if chkpts_dir_path is None:
         chkpts_dir_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'checkpoints')
@@ -90,6 +91,9 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
             assert not np.isnan(np.mean(ls))
             # Perform backward pass (i.e. backprop)
             L_k_q.backward()
+            # Clip gradients
+            if use_grad_clip:
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0, norm_type=2)
             # Update weights
             optimizer.step()
 
@@ -173,7 +177,8 @@ def train_and_save_checkpoints(seed: int,
                                batch_size: int,
                                debug: bool,
                                dtype=torch.float64,
-                               chkpts_dir_path=None
+                               chkpts_dir_path=None,
+                               use_grad_clip: bool = False
                                ):
     """
     Method to train one configuration, and output a checkpoint file
@@ -189,6 +194,7 @@ def train_and_save_checkpoints(seed: int,
     :param debug: If True, will execute only one epoch of the training process
     :param dtype: one of `torch.float64` (or `torch.double`), `torch.float32` (or `torch.float`)
     :param chkpts_dir_path: absolute path to checkpoints directory
+    :param use_grad_clip:
     """
     if cuda:
         assert torch.cuda.is_available(), "No CUDA CPU available."
@@ -253,7 +259,7 @@ def train_and_save_checkpoints(seed: int,
     # Start the training loop
     _model = train(model=_model, dataloader=_train_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k,
                    n_epochs=3280, model_type=model_type, state_name=state_name, debug=_debug, device=_device,
-                   chkpts_dir_path=chkpts_dir_path)
+                   chkpts_dir_path=chkpts_dir_path, use_grad_clip=use_grad_clip)
     print('[DONE]')
 
     print('Calculating L_5000...')
@@ -275,14 +281,47 @@ def train_and_save_checkpoints(seed: int,
 
 if __name__ == '__main__':
     DownloadableDataset.set_data_directory('../data')
+    # train_and_save_checkpoints(seed=42,
+    #                            cuda=True,
+    #                            k=1,
+    #                            num_layers=2,
+    #                            dataset='mnist',
+    #                            model_type='iwae',
+    #                            use_clone=False,
+    #                            batch_size=400,
+    #                            debug=False,
+    #                            dtype=torch.float32,
+    #                            chkpts_dir_path='../checkpoints')
+    #
+    # torch.cuda.empty_cache()
+    # train_and_save_checkpoints(seed=42,
+    #                            cuda=True,
+    #                            k=5,
+    #                            num_layers=2,
+    #                            dataset='mnist',
+    #                            model_type='iwae',
+    #                            use_clone=False,
+    #                            batch_size=400,
+    #                            debug=False,
+    #                            dtype=torch.float32,
+    #                            chkpts_dir_path='../checkpoints')
+
+    torch.cuda.empty_cache()
     train_and_save_checkpoints(seed=42,
                                cuda=True,
-                               k=1,
+                               k=50,
                                num_layers=2,
                                dataset='mnist',
                                model_type='iwae',
                                use_clone=False,
                                batch_size=400,
-                               debug=False,
+                               debug=True,
                                dtype=torch.float32,
-                               chkpts_dir_path='../checkpoints')
+                               chkpts_dir_path='../checkpoints',
+                               use_grad_clip=False)
+    # --------
+    #  L5000
+    # --------
+    # IWAE L=2 | k=1 : -86.53
+    # IWAE L=2 | k=5 : -84.14
+    # IWAE L=2 | k=50:
