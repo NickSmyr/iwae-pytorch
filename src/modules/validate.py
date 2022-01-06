@@ -9,13 +9,15 @@ def validate(dataloader, model, device, loss_parameters={}):
     num_data_points = 0
 
     with torch.no_grad():
-        for X in tqdm(dataloader):
+        pbar = tqdm(dataloader)
+        for X in pbar:
             num_data_points += len(X)
             X = X.type(torch.get_default_dtype()).to(device)
             if type(dataloader) != BinaryMnistDataloader:
                 X = torch.bernoulli(X)
             loss = torch.sum(model.estimate_loss(X, **loss_parameters))
             total_loss += loss.item()
+            pbar.set_description(f'L|{total_loss / num_data_points:.3f}')
 
     total_loss /= num_data_points
 
