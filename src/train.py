@@ -15,7 +15,7 @@ from tqdm.autonotebook import tqdm
 # noinspection PyUnresolvedReferences
 import dataloaders
 # noinspection PyUnresolvedReferences
-from dataloaders.omniglot import OmniglotDataloader
+from dataloaders.mnist import BinaryMnistDataloader
 from ifaces import DistributionSampler, DownloadableDataset
 from iwae_clone import IWAEClone
 from modules.vae import VAE
@@ -82,10 +82,13 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
             # Perform forward pass
             if type(x) == list:
                 x = x[0].squeeze()
+            x = x.type(torch.get_default_dtype()).to(device)
+            if type(dataloader) != BinaryMnistDataloader:
+                x = torch.bernoulli(x)
             if isinstance(model, IWAEClone):
-                L_k_q = model(torch.bernoulli(x.type(torch.get_default_dtype()).to(device)), k=k, model_type=model_type)
+                L_k_q = model(x, k=k, model_type=model_type)
             else:
-                L_k_q = model.objective(torch.bernoulli(x.type(torch.get_default_dtype()).to(device)))
+                L_k_q = model.objective(x)
             ls.append(-L_k_q.item())
             pbar.set_description(f'[e|{e:03d}/{n_epochs:03d}][l|{np.mean(ls):.03f}][L1|{L1:.03f}] ')
             assert not np.isnan(np.mean(ls))
