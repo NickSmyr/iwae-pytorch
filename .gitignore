@@ -7,3 +7,6 @@ checkpoints/*.pkl
 checkpoints/old/*.pkl
 checkpoints/old
 *.pyc
+figures/*.png
+figures/*.pdf
+figures/*.svg

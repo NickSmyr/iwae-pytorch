@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -150,3 +151,27 @@ class IWAEClone(nn.Module):
                 )
                 pbar.set_description(f'[mean(s)|{np.mean(s):.03f}] ')
         return s / N
+
+    def plot_true_posterior(self, x: torch.Tensor, num_samples: int = 6):
+        def get_ll_for_x_h(_x, h):
+            q_samples = [_x, h]
+            ll = torch.zeros(q_samples[-1].shape[0], device=q_samples[-1].device)
+            for layer_q, layer_p, prev_sample, next_sample in zip(self.q_layers, reversed(self.p_layers),
+                                                                  q_samples, q_samples[1:]):
+                ll += layer_p.log_likelihood(prev_sample.clone(), next_sample.clone())
+            return ll + self.prior.log_likelihood(h)
+
+        h1, h2 = np.meshgrid(np.linspace(-2, 2, 50), np.linspace(-2, 2, 50))
+        ll_h = np.zeros_like(h1)
+        for i in range(len(h1)):
+            for j in range(len(h2)):
+                ll_h[i, j] = get_ll_for_x_h(x, torch.tensor([[h1[i, j], h2[i, j]]]).type(x.type()).to(x.device))
+
+        plt.pcolormesh(h1, h2, ll_h, cmap='RdBu')
+        plt.colorbar()
+        plt.show()
+
+
+if __name__ == '__main__':
+    _m = IWAEClone.random(latent_units=[28 * 28] + [2], hidden_units_q=[[50]], hidden_units_p=[[50]])
+    _m.plot_true_posterior(x=torch.randn(1, 784))
