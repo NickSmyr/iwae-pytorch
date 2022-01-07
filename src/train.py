@@ -23,8 +23,8 @@ from modules.iwae import IWAE
 import modules.validate
 
 
-def get_state_name(dataset_title, model_type, use_clone, k, num_layers, batch_size):
-    return f'{dataset_title}_{model_type}{"-clone" if use_clone else ""}_k{k:02d}_L{num_layers}_bs{batch_size}'
+def get_state_name(dataset_title, model_type, use_clone, k, two_dim_latent_space, num_layers, batch_size):
+    return f'{dataset_title}_{model_type}{"-clone" if use_clone else ""}{"2d" if two_dim_latent_space else ""}_k{k:02d}_L{num_layers}_bs{batch_size}'
 
 
 def calculate_and_display_L5000(test_dataloader, model, device):
@@ -173,6 +173,7 @@ def plot_lr():
 def train_and_save_checkpoints(seed: int,
                                cuda: bool,
                                k: int,
+                               two_dim_latent_space: bool,
                                num_layers: int,
                                dataset: str,
                                model_type: str,
@@ -212,11 +213,11 @@ def train_and_save_checkpoints(seed: int,
     _debug = debug
 
     if num_layers == 1:
-        _latent_units = [50]
+        _latent_units = [2 if two_dim_latent_space else 50]
         _hidden_units_q = [[200, 200]]
         _hidden_units_p = [[200, 200]]
     elif num_layers == 2:
-        _latent_units = [100, 50]
+        _latent_units = [100, 2 if two_dim_latent_space else 50]
         _hidden_units_q = [[200, 200], [100, 100]]
         _hidden_units_p = [[100, 100], [200, 200]]
     else:
@@ -257,7 +258,7 @@ def train_and_save_checkpoints(seed: int,
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
 
     # Construct general name for checkpoint files
-    state_name = get_state_name(_train_dataloader.dataset.title, model_type, use_clone, k, num_layers, batch_size)
+    state_name = get_state_name(_train_dataloader.dataset.title, model_type, use_clone, k, two_dim_latent_space, num_layers, batch_size)
 
     # Start the training loop
     _model = train(model=_model, dataloader=_train_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k,
@@ -266,11 +267,6 @@ def train_and_save_checkpoints(seed: int,
     print('[DONE]')
 
     print('Calculating L_5000...')
-    time.sleep(0.1)
-    calculate_and_display_L5000(_test_dataloader, _model, device=_device)
-    print('[DONE]')
-
-    print('Generating Samples...')
     time.sleep(0.1)
     calculate_and_display_L5000(_test_dataloader, _model, device=_device)
     print('[DONE]')
@@ -291,11 +287,12 @@ if __name__ == '__main__':
     DownloadableDataset.set_data_directory('../data')
     train_and_save_checkpoints(seed=42,
                                cuda=True,
-                               k=1,
-                               num_layers=1,
+                               k=50,
+                               two_dim_latent_space=False,
+                               num_layers=2,
                                dataset='fashion_mnist',
                                model_type='iwae',
-                               use_clone=False,
+                               use_clone=True,
                                batch_size=400,
                                debug=False,
                                dtype=torch.float32,
