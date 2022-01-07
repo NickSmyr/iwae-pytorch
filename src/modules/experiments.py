@@ -16,6 +16,10 @@ def load_checkpoint(checkpoint_fname):
 
     dataset_name = splitted_checkpint_fname[0]
     model_type = splitted_checkpint_fname[1]
+
+    two_dim_latent_space = model_type[-2:] == '2d'
+    if two_dim_latent_space: model_type = model_type[:-2]
+
     k = int(splitted_checkpint_fname[2][1:])
     num_layers = int(splitted_checkpint_fname[3][1:])
     train_bs = int(splitted_checkpint_fname[4][2:])
@@ -38,11 +42,11 @@ def load_checkpoint(checkpoint_fname):
         raise Exception(f'Unknown dataset name {dataset_name}')
 
     if num_layers == 1:
-        _latent_units = [50]
+        _latent_units = [2 if two_dim_latent_space else 50]
         _hidden_units_q = [[200, 200]]
         _hidden_units_p = [[200, 200]]
     elif num_layers == 2:
-        _latent_units = [100, 50]
+        _latent_units = [100, 2 if two_dim_latent_space else 50]
         _hidden_units_q = [[200, 200], [100, 100]]
         _hidden_units_p = [[100, 100], [200, 200]]
     else:
