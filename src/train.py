@@ -15,7 +15,7 @@ from tqdm.autonotebook import tqdm
 # noinspection PyUnresolvedReferences
 import dataloaders
 # noinspection PyUnresolvedReferences
-from dataloaders.omniglot import OmniglotDataloader
+from dataloaders.mnist import BinaryMnistDataloader
 from ifaces import DistributionSampler, DownloadableDataset
 from iwae_clone import IWAEClone
 from modules.vae import VAE
@@ -82,10 +82,13 @@ def train(model, dataloader: DataLoader, optimizer: Optimizer, k: int, scheduler
             # Perform forward pass
             if type(x) == list:
                 x = x[0].squeeze()
+            x = x.type(torch.get_default_dtype()).to(device)
+            if type(dataloader) != BinaryMnistDataloader:
+                x = torch.bernoulli(x)
             if isinstance(model, IWAEClone):
-                L_k_q = model(torch.bernoulli(x.type(torch.get_default_dtype()).to(device)), k=k, model_type=model_type)
+                L_k_q = model(x, k=k, model_type=model_type)
             else:
-                L_k_q = model.objective(torch.bernoulli(x.type(torch.get_default_dtype()).to(device)))
+                L_k_q = model.objective(x)
             ls.append(-L_k_q.item())
             pbar.set_description(f'[e|{e:03d}/{n_epochs:03d}][l|{np.mean(ls):.03f}][L1|{L1:.03f}] ')
             assert not np.isnan(np.mean(ls))
@@ -267,6 +270,11 @@ def train_and_save_checkpoints(seed: int,
     calculate_and_display_L5000(_test_dataloader, _model, device=_device)
     print('[DONE]')
 
+    print('Generating Samples...')
+    time.sleep(0.1)
+    calculate_and_display_L5000(_test_dataloader, _model, device=_device)
+    print('[DONE]')
+
     # Save the final checkpoint
     _state_fpath = os.path.join(chkpts_dir_path, state_name + '_final.pkl')
     torch.save({
@@ -283,11 +291,11 @@ if __name__ == '__main__':
     DownloadableDataset.set_data_directory('../data')
     train_and_save_checkpoints(seed=42,
                                cuda=True,
-                               k=50,
-                               num_layers=2,
+                               k=1,
+                               num_layers=1,
                                dataset='fashion_mnist',
                                model_type='iwae',
-                               use_clone=True,
+                               use_clone=False,
                                batch_size=400,
                                debug=False,
                                dtype=torch.float32,
