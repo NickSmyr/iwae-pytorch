@@ -239,11 +239,14 @@ class VAE(nn.Module):
         #     BernoulliStochasticLayer(q_dim_reversed[L - 1], hidden_dims_reversed[L - 1], input_dim, use_bias, None))
         #
         # self.decoder = nn.Sequential(*self.decoder_layers)
-        # # self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, use_bias, output_bias)
+        # #self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, use_bias, output_bias)
 
-    def forward(self, x):
+    def forward(self, x, return_mean: bool = False):
         h_samples = self.encoder(x)
-        x_samples = self.decoder(h_samples)
+        if return_mean:
+            x_samples = self.decoder_layers[-1].calc_mean(h_samples)
+        else:
+            x_samples = self.decoder(h_samples)
 
         return x_samples
 

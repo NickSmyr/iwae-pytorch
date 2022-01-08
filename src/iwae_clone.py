@@ -167,7 +167,8 @@ class IWAEClone(nn.Module):
             for j in range(len(h2)):
                 ll_h[i, j] = get_ll_for_x_h(x, torch.tensor([[h1[i, j], h2[i, j]]]).type(x.type()).to(x.device))
 
-        plt.pcolormesh(h1, h2, ll_h, cmap='RdBu')
+        plt.figure()
+        plt.pcolormesh(h1, h2, ll_h, cmap='Greys')
         plt.colorbar()
         plt.show()
 

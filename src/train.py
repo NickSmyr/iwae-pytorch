@@ -258,13 +258,29 @@ def train_and_save_checkpoints(seed: int,
     _scheduler = LambdaLR(_optimizer, lr_lambda=update_lr)
 
     # Construct general name for checkpoint files
-    state_name = get_state_name(_train_dataloader.dataset.title, model_type, use_clone, k, two_dim_latent_space, num_layers, batch_size)
+    state_name = get_state_name(_train_dataloader.dataset.title, model_type, use_clone, k, two_dim_latent_space,
+                                num_layers, batch_size)
 
     # Start the training loop
     _model = train(model=_model, dataloader=_train_dataloader, optimizer=_optimizer, scheduler=_scheduler, k=_k,
                    n_epochs=3280, model_type=model_type, state_name=state_name, debug=_debug, device=_device,
                    chkpts_dir_path=chkpts_dir_path, use_grad_clip=use_grad_clip)
     print('[DONE]')
+
+    # Print "true" posterior samples
+    if type(_model) == IWAEClone:
+        # 0
+        _model.plot_true_posterior(_test_dataloader.dataset[10])
+        # 1
+        _model.plot_true_posterior(_test_dataloader.dataset[2])
+        # 2
+        _model.plot_true_posterior(_test_dataloader.dataset[1])
+        # 3
+        _model.plot_true_posterior(_test_dataloader.dataset[30])
+        # 4
+        _model.plot_true_posterior(_test_dataloader.dataset[4])
+        # 4
+        _model.plot_true_posterior(_test_dataloader.dataset[15])
 
     print('Calculating L_5000...')
     time.sleep(0.1)
@@ -286,11 +302,11 @@ def train_and_save_checkpoints(seed: int,
 if __name__ == '__main__':
     DownloadableDataset.set_data_directory('../data')
     train_and_save_checkpoints(seed=42,
-                               cuda=True,
-                               k=50,
-                               two_dim_latent_space=False,
-                               num_layers=2,
-                               dataset='fashion_mnist',
+                               cuda=False,
+                               k=1,
+                               two_dim_latent_space=True,
+                               num_layers=1,
+                               dataset='mnist',
                                model_type='iwae',
                                use_clone=True,
                                batch_size=400,
