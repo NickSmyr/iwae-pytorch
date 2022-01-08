@@ -9,6 +9,7 @@ import dataloaders.mnist
 from ifaces import DownloadableDataset
 from modules.iwae import IWAE
 from modules.vae import VAE
+from utils_clone.pytorch import reshape_and_tile_images
 
 
 def load_checkpoint(checkpoint_fname):
@@ -302,17 +303,37 @@ def plot_100_samples(*args, figure_path):
         pin_memory=True,
         shuffle=False)
 
-    model1: VAE = load_checkpoint(checkpoint1_path)
-    model2: IWAE = load_checkpoint(checkpoint2_path)
+    # Generate 100 random samples from the dataset
+    x = None
+    for i in np.random.choice(list(range(len(test_dataloader.dataset))), 100, replace=False):
+        if x is None:
+            x = test_dataloader.dataset[i].numpy()
+        else:
+            x = np.vstack((x, test_dataloader.dataset[i].numpy()))
 
-    # Find boundaries
-    # for i, batch in enumerate(test_dataloader):
-    #     h = model1.encoder(batch)
-    #     print(h.min(dim=0).values, h.max(dim=0).values)
-    #     if i > 5:
-    #         break
+    n_ckpts = len(args)
+    assert n_ckpts > 0
+
+    plt.subplots(1, n_ckpts + 1, figsize=(n_ckpts * 5, 5))
+    plt.subplot(1, n_ckpts + 1, 1)
+    plt.axis('off')
+    plt.xticks([])
+    plt.yticks([])
+    plt.imshow(reshape_and_tile_images(x), cmap='Greys')
+
     with torch.no_grad():
-        pass
+        for i, checkpoint_path in enumerate(args):
+            model = load_checkpoint(checkpoint_path)
+            plt.subplot(1, n_ckpts + 1, i + 2)
+            plt.axis('off')
+            plt.xticks([])
+            plt.yticks([])
+            x_hat = model(torch.bernoulli(torch.from_numpy(x).type(torch.get_default_dtype())),
+                          return_mean=True).cpu().numpy()
+            plt.imshow(reshape_and_tile_images(x_hat), cmap='Greys')
+    plt.tight_layout()
+    plt.savefig(figure_path)
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -326,13 +347,22 @@ if __name__ == '__main__':
     #     "../../figures/posteriors.pdf",
     #     return_mean=True)
 
-    plot_lerp_samples(
-        "../../checkpoints/mnist_vae2d_k01_L1_bs400_final.pkl",
-        "../../checkpoints/mnist_iwae2d_k50_L1_bs400_final.pkl",
-        "../../figures/lerp.pdf",
-        n_img=20)
+    # plot_lerp_samples(
+    #     "../../checkpoints/mnist_vae2d_k01_L1_bs400_final.pkl",
+    #     "../../checkpoints/mnist_iwae2d_k50_L1_bs400_final.pkl",
+    #     "../../figures/lerp.pdf",
+    #     n_img=20)
 
     # plot_100_samples(
     #     "../../checkpoints/mnist_vae2d_k01_L1_bs400_final.pkl",
-    #     "../../checkpoints/mnist_iwae2d_k50_L1_bs400_final.pkl",
+    #     "../../checkpoints/mnist_vae_k01_L1_bs400_final.pkl",
+    #     "../../checkpoints/mnist_vae_k50_L1_bs400_final.pkl",
+    #     figure_path="../../figures/vae_samples.pdf"
     # )
+
+    plot_100_samples(
+        "../../checkpoints/mnist_iwae2d_k50_L1_bs400_final.pkl",
+        "../../checkpoints/mnist_iwae_k01_L1_bs400_final.pkl",
+        "../../checkpoints/mnist_iwae_k50_L1_bs400_final.pkl",
+        figure_path="../../figures/iwae_samples.pdf"
+    )
