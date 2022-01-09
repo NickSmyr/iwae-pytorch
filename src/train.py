@@ -268,19 +268,19 @@ def train_and_save_checkpoints(seed: int,
     print('[DONE]')
 
     # Print "true" posterior samples
-    if type(_model) == IWAEClone:
-        # 0
-        _model.plot_true_posterior(_test_dataloader.dataset[10])
-        # 1
-        _model.plot_true_posterior(_test_dataloader.dataset[2])
-        # 2
-        _model.plot_true_posterior(_test_dataloader.dataset[1])
-        # 3
-        _model.plot_true_posterior(_test_dataloader.dataset[30])
-        # 4
-        _model.plot_true_posterior(_test_dataloader.dataset[4])
-        # 4
-        _model.plot_true_posterior(_test_dataloader.dataset[15])
+    # if type(_model) == IWAEClone:
+    #     # 0
+    #     _model.plot_true_posterior(_test_dataloader.dataset[10])
+    #     # 1
+    #     _model.plot_true_posterior(_test_dataloader.dataset[2])
+    #     # 2
+    #     _model.plot_true_posterior(_test_dataloader.dataset[1])
+    #     # 3
+    #     _model.plot_true_posterior(_test_dataloader.dataset[30])
+    #     # 4
+    #     _model.plot_true_posterior(_test_dataloader.dataset[4])
+    #     # 4
+    #     _model.plot_true_posterior(_test_dataloader.dataset[15])
 
     print('Calculating L_5000...')
     time.sleep(0.1)
