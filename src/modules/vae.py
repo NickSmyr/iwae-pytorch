@@ -1,20 +1,20 @@
+import math
 from itertools import chain
 from typing import Optional, List
-import math
 
 import torch
 from torch import nn
 
 from utils.logging import CommandLineLogger
 
-
-half_log2pi = 1.0/2.0 * math.log(2.0 * math.pi)
+half_log2pi = 1.0 / 2.0 * math.log(2.0 * math.pi)
 
 
 class Exponential(nn.Module):
     """
     An exponential output unit.
     """
+
     def __init__(self):
         super().__init__()
 
@@ -44,14 +44,15 @@ class GaussianStochasticLayer(nn.Module):
     """
     A gaussian stochastic layer.
     """
+
     def __init__(
-        self,
-        input_dim,
-        hidden_dims,
-        output_dim,
-        device = "cpu",
-        use_bias: bool = True,
-        output_bias = None):
+            self,
+            input_dim,
+            hidden_dims,
+            output_dim,
+            device="cpu",
+            use_bias: bool = True,
+            output_bias=None):
         """
         Constructor for a stochastic layer.
         :param (int) input_dim: input dimension for layer
@@ -76,7 +77,6 @@ class GaussianStochasticLayer(nn.Module):
                 self.mean_network.bias.copy_(output_bias)
         self.sigma_network = nn.Sequential(nn.Linear(hidden_dims[-1], output_dim), Exponential())
 
-
     def calc_mean_sigma(self, x):
         hidden = self.hidden_network(x)
 
@@ -84,7 +84,6 @@ class GaussianStochasticLayer(nn.Module):
         sigma = self.sigma_network(hidden)
 
         return mean, sigma
-
 
     def forward(self, x):
         """
@@ -96,7 +95,6 @@ class GaussianStochasticLayer(nn.Module):
 
         return samples
 
-
     def calc_log_likelihood(self, x, samples):
         """
         Calculate p(x|samples,theta)
@@ -107,19 +105,19 @@ class GaussianStochasticLayer(nn.Module):
         return p
 
 
-
 class BernoulliStochasticLayer(nn.Module):
     """
     A bernoulli stochastic layer.
     """
+
     def __init__(
-        self,
-        input_dim,
-        hidden_dims,
-        output_dim,
-        device = "cpu",
-        use_bias: bool = True,
-        output_bias = None):
+            self,
+            input_dim,
+            hidden_dims,
+            output_dim,
+            device="cpu",
+            use_bias: bool = True,
+            output_bias=None):
         """
         Constructor for a stochastic layer.
         :param (int) input_dim: input dimension for layer
@@ -139,18 +137,16 @@ class BernoulliStochasticLayer(nn.Module):
 
         # Sampler
         mean_linear = nn.Linear(hidden_dims[-1], output_dim, bias=use_bias)
-        if not output_bias is None:
+        if output_bias is not None:
             with torch.no_grad():
                 mean_linear.bias.copy_(output_bias)
         self.mean_network = nn.Sequential(mean_linear, nn.Sigmoid())
-
 
     def calc_mean(self, x):
         hidden = self.hidden_network(x)
         mean = self.mean_network(hidden)
 
         return mean
-
 
     def forward(self, x):
         """
@@ -160,7 +156,6 @@ class BernoulliStochasticLayer(nn.Module):
         samples = torch.bernoulli(mean).to(device=self.device)
 
         return samples
-
 
     def calc_log_likelihood(self, x, samples):
         """
@@ -172,7 +167,6 @@ class BernoulliStochasticLayer(nn.Module):
         return p
 
 
-
 class VAE(nn.Module):
     """
     VAE Class:
@@ -180,17 +174,17 @@ class VAE(nn.Module):
     """
 
     def __init__(
-        self,
-        c_in: int = 1,
-        w_in_width: int = 28,
-        w_in_height: int = 28,
-        q_dim: int = 64,
-        p_dim: Optional[int] = None,
-        device = "cpu",
-        use_bias: bool = True,
-        output_bias = None,
-        hidden_dims: Optional[List[int]] = None,
-        logger: Optional[CommandLineLogger] = None):
+            self,
+            c_in: int = 1,
+            w_in_width: int = 28,
+            w_in_height: int = 28,
+            q_dim: int = 64,
+            p_dim: Optional[int] = None,
+            device="cpu",
+            use_bias: bool = True,
+            output_bias=None,
+            hidden_dims: Optional[List[int]] = None,
+            logger: Optional[CommandLineLogger] = None):
         """
         VAE class constructor.
         :param (int) c_in: number of input channels
@@ -219,8 +213,8 @@ class VAE(nn.Module):
         self.encoder = GaussianStochasticLayer(input_dim, hidden_dims, q_dim, device, use_bias, None)
 
         # Decoder Network
-        self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, device, use_bias, output_bias)
-
+        self.decoder = BernoulliStochasticLayer(p_dim, list(reversed(hidden_dims)), input_dim, device, use_bias,
+                                                output_bias)
 
     def forward(self, x):
         h_samples = self.encoder(x)
@@ -228,19 +222,18 @@ class VAE(nn.Module):
 
         return x_samples
 
-
     def calc_log_p(self, x, h_samples):
         """
         Calculate p(x,h|theta)
         """
         # Calculate prior: log p(h|theta)
-        prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples), torch.ones_like(h_samples))
+        prior = calc_log_likelihood_of_samples_gaussian(h_samples, torch.zeros_like(h_samples),
+                                                        torch.ones_like(h_samples))
 
         # Calculate p(x|h,theta)
         p = self.decoder.calc_log_likelihood(x, h_samples)
 
         return prior + p
-
 
     def calc_log_q(self, h_samples, x):
         """
@@ -249,7 +242,6 @@ class VAE(nn.Module):
         q = self.encoder.calc_log_likelihood(h_samples, x)
 
         return q
-
 
     def objective(self, x):
         """
