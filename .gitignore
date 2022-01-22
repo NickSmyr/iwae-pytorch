@@ -2,5 +2,11 @@
 data/mnist
 data/binary_mnist
 data/omniglot
+data/FashionMNIST
 checkpoints/*.pkl
+checkpoints/old/*.pkl
+checkpoints/old
 *.pyc
+figures/*.png
+figures/*.pdf
+figures/*.svg

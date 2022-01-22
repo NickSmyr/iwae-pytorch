@@ -77,8 +77,8 @@ class GaussianSampler(nn.Module, DistributionSampler):
     @staticmethod
     def log_likelihood_for_mean_sigma(samples: torch.Tensor, mean: torch.Tensor, sigma: torch.Tensor):
         return -0.5 * samples.shape[1] * math.log(2 * np.pi) \
-               - 0.5 * torch.sum(((samples - mean) / (sigma + sys.float_info.epsilon)).square() + 2.0 *
-                                 torch.log(sigma + sys.float_info.epsilon), dim=1)
+               - 0.5 * torch.sum(((samples - mean) / (sigma + sys.float_info.epsilon)).square() +
+                                 2.0 * torch.log(sigma + sys.float_info.epsilon), dim=1)
 
     def log_likelihood(self, samples: torch.Tensor, x: torch.Tensor):
         mean, sigma = self.get_mean_sigma(x)
@@ -105,7 +105,8 @@ class GaussianSampler(nn.Module, DistributionSampler):
         mean_network = nn.Linear(n_units[-2], n_units[-1])
         mean_network.apply(GaussianSampler.init_weights)
         if mean is not None:
-            mean_network.bias.data.copy_(mean)
+            with torch.no_grad():
+                mean_network.bias.copy_(mean)
         sigma_network = nn.Sequential(
             nn.Linear(n_units[-2], n_units[-1]),
             Exponential(),

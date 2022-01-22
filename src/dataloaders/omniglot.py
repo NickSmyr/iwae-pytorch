@@ -3,8 +3,11 @@ import os
 import numpy as np
 import torch
 # noinspection PyProtectedMember
+from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader, Dataset
+from torchvision.transforms import transforms
 
+from dataloaders.mnist import MnistDataset
 from ifaces import DownloadableDataset
 
 
@@ -19,7 +22,7 @@ class OmniglotDataset(Dataset, DownloadableDataset):
         Dataset.__init__(self)
 
     def __getitem__(self, index) -> torch.Tensor:
-        return torch.from_numpy(self.data[index].flatten())
+        return MnistDataset.DTransforms(self.data[index])
 
     def __len__(self) -> int:
         return len(self.data)
@@ -41,11 +44,10 @@ class OmniglotDataloader(DataLoader):
         DataLoader.__init__(self, dataset=OmniglotDataset(train_not_test=train_not_test), **kwargs)
 
 
-
-
 if __name__ == '__main__':
-    DownloadableDataset.set_data_directory('/home/achariso/PycharmProjects/kth-ml-course-projects/iwae-pytorch/data')
+    DownloadableDataset.set_data_directory('../../data')
     _dl = OmniglotDataloader(train_not_test=True, batch_size=100, pin_memory=False)
     _first_batch = next(iter(_dl))
     print(_first_batch.shape)
-    pass
+    plt.imshow(1 - _first_batch[5].reshape(28, 28), cmap='gray')
+    plt.show()

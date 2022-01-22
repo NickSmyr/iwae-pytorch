@@ -20,6 +20,8 @@ class MyTestCase(unittest.TestCase):
 
     def test_experiments(self):
         checkpoint_path = "../../checkpoints/omniglot_k50_L1_efinal.pkl"
+        # TODO
+        return
         #with open(checkpoint_path, 'rb') as f:
             #obj = pickle.load(f)
         # TODO couldn't this configuration be stored inside the model?
